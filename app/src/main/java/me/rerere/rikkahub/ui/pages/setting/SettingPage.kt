@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -71,6 +72,7 @@ import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -173,7 +175,7 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                                         ColorMode.DARK -> stringResource(R.string.setting_page_color_mode_dark)
                                     }
                                 },
-                                modifier = Modifier.width(130.dp)
+                                modifier = Modifier.wrapContentWidth()
                             )
                         }
                     )
@@ -195,7 +197,7 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                         title = stringResource(R.string.setting_page_prompt_injections),
                         subtitle = stringResource(R.string.setting_page_prompt_injections_desc),
                         icon = { Icon(Icons.Rounded.Code, null, modifier = Modifier.size(20.dp)) },
-                        onClick = { navController.navigate(Screen.SettingModes) }
+                        onClick = { navController.navigate(Screen.SettingModes()) }
                     )
                 }
             }
@@ -238,6 +240,13 @@ fun SettingPage(vm: SettingVM = koinViewModel()) {
                         subtitle = stringResource(R.string.setting_page_mcp_desc),
                         icon = { Icon(Icons.Rounded.Code, null, modifier = Modifier.size(20.dp)) },
                         onClick = { navController.navigate(Screen.SettingMcp) }
+                    )
+
+                    SettingGroupItem(
+                        title = stringResource(R.string.setting_android_integration),
+                        subtitle = stringResource(R.string.setting_android_integration_desc),
+                        icon = { Icon(Icons.Rounded.PhoneAndroid, null, modifier = Modifier.size(20.dp)) },
+                        onClick = { navController.navigate(Screen.SettingAndroidIntegration) }
                     )
                 }
             }

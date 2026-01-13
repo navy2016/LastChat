@@ -124,6 +124,9 @@ fun ChatMessage(
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onUpdate: (MessageNode) -> Unit,
+    onEditLorebookEntry: ((me.rerere.ai.ui.UsedLorebookEntry) -> Unit)? = null,
+    onModeClick: ((me.rerere.ai.ui.UsedMode) -> Unit)? = null,
+    onMemoryClick: ((me.rerere.ai.ui.UsedMemory) -> Unit)? = null,
 ) {
     val message = node.messages[node.selectIndex]
     val settings = LocalSettings.current.displaySetting
@@ -256,6 +259,9 @@ fun ChatMessage(
                 onOpenActionSheet = {
                     showActionsSheet = true
                 },
+                onEditLorebookEntry = onEditLorebookEntry,
+                onModeClick = onModeClick,
+                onMemoryClick = onMemoryClick,
             )
         }
     }
@@ -694,7 +700,12 @@ private fun TokenStatisticsRow(
                 tint = grayColor
             )
             Text(
-                text = stringResource(R.string.tokens_format, usage.promptTokens.formatNumber()),
+                text = buildString {
+                    append("${usage.promptTokens.formatNumber()} tokens")
+                    if (usage.cachedTokens > 0) {
+                        append(" (${usage.cachedTokens.formatNumber()} cached)")
+                    }
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = grayColor
             )
@@ -712,7 +723,7 @@ private fun TokenStatisticsRow(
                 tint = grayColor
             )
             Text(
-                text = stringResource(R.string.tokens_format, usage.completionTokens.formatNumber()),
+                text = "${usage.completionTokens.formatNumber()} tokens",
                 style = MaterialTheme.typography.labelSmall,
                 color = grayColor
             )
@@ -731,7 +742,11 @@ private fun TokenStatisticsRow(
                     tint = grayColor
                 )
                 Text(
-                    text = String.format("%.1f tok/s", tps),
+                    text = if (tps < 1000) {
+                        String.format("%.0f tok/s", tps)
+                    } else {
+                        String.format("%.1f tok/s", tps)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = grayColor
                 )
@@ -763,12 +778,17 @@ private fun TokenStatisticsRowInline(
         ) {
             Icon(
                 imageVector = Icons.Rounded.ArrowUpward,
-                contentDescription = "Sent",
+                contentDescription = stringResource(R.string.a11y_sent),
                 modifier = Modifier.size(14.dp),
                 tint = grayColor
             )
             Text(
-                text = "${usage.promptTokens.formatNumber()} tokens",
+                text = buildString {
+                    append("${usage.promptTokens.formatNumber()} tokens")
+                    if (usage.cachedTokens > 0) {
+                        append(" (${usage.cachedTokens.formatNumber()} cached)")
+                    }
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = grayColor
             )
@@ -781,7 +801,7 @@ private fun TokenStatisticsRowInline(
         ) {
             Icon(
                 imageVector = Icons.Rounded.ArrowDownward,
-                contentDescription = "Received",
+                contentDescription = stringResource(R.string.a11y_received),
                 modifier = Modifier.size(14.dp),
                 tint = grayColor
             )
@@ -800,12 +820,16 @@ private fun TokenStatisticsRowInline(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Bolt,
-                    contentDescription = "Speed",
+                    contentDescription = stringResource(R.string.a11y_speed),
                     modifier = Modifier.size(14.dp),
                     tint = grayColor
                 )
                 Text(
-                    text = String.format("%.1f tok/s", tps),
+                    text = if (tps < 1000) {
+                        String.format("%.0f tok/s", tps)
+                    } else {
+                        String.format("%.1f tok/s", tps)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = grayColor
                 )

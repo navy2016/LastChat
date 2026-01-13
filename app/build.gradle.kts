@@ -1,3 +1,4 @@
+import com.google.gms.googleservices.GoogleServicesTask
 import org.apache.tools.ant.taskdefs.condition.Os
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
@@ -20,11 +21,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "lastchat.rikkafork.cocolal.zh"
+        applicationId = "lastchat.rikkafork.cocolal"
         minSdk = 31
         targetSdk = 36
-        versionCode = ((System.currentTimeMillis() - 1577808000000) / 60000).toInt() // 基于 2020-01-01 00:00:00 UTC 的分钟数
-        versionName = "1.2.8"
+        versionCode = 22
+        versionName = "1.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -136,6 +137,22 @@ android {
         compilerOptions.optIn.add("kotlin.uuid.ExperimentalUuidApi")
         compilerOptions.optIn.add("kotlin.time.ExperimentalTime")
         compilerOptions.optIn.add("kotlinx.coroutines.ExperimentalCoroutinesApi")
+    }
+}
+
+tasks.withType<GoogleServicesTask>().configureEach {
+    val variantName = name
+        .removePrefix("process")
+        .removeSuffix("GoogleServices")
+        .replaceFirstChar { it.lowercase() }
+
+    onlyIf {
+        listOf(
+            file("src/$variantName/google-services.json"),
+            file("src/${variantName.replaceFirstChar { it.uppercase() }}/google-services.json"),
+            file("src/google-services.json"),
+            file("google-services.json"),
+        ).any { it.exists() }
     }
 }
 

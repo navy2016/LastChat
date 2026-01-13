@@ -33,6 +33,7 @@ import me.rerere.rikkahub.data.model.Avatar
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.Mode
 import me.rerere.rikkahub.data.model.Tag
+import me.rerere.rikkahub.data.model.TextSelectionConfig
 import me.rerere.rikkahub.ui.theme.PresetThemes
 import me.rerere.rikkahub.utils.JsonInstant
 import me.rerere.rikkahub.utils.toMutableStateFlow
@@ -57,6 +58,7 @@ private val Context.settingsStore by preferencesDataStore(
 class SettingsStore(
     context: Context,
     scope: AppScope,
+    private val quickCache: QuickSettingsCache,
 ) : KoinComponent {
     companion object {
         // 版本号
@@ -117,6 +119,9 @@ class SettingsStore(
         // Prompt Injections
         val MODES = stringPreferencesKey("modes")
         val LOREBOOKS = stringPreferencesKey("lorebooks")
+
+        // Android Integration
+        val TEXT_SELECTION_CONFIG = stringPreferencesKey("text_selection_config")
     }
 
     private val dataStore = context.settingsStore
@@ -194,6 +199,9 @@ class SettingsStore(
                 lorebooks = preferences[LOREBOOKS]?.let {
                     JsonInstant.decodeFromString(it)
                 } ?: emptyList(),
+                textSelectionConfig = preferences[TEXT_SELECTION_CONFIG]?.let {
+                    JsonInstant.decodeFromString(it)
+                } ?: TextSelectionConfig(),
             )
         }
         .map {
@@ -266,7 +274,8 @@ class SettingsStore(
 
     val settingsFlow = settingsFlowRaw
         .distinctUntilChanged()
-        .toMutableStateFlow(scope, Settings.dummy())
+        .onEach { settings -> quickCache.updateCache(settings) }
+        .toMutableStateFlow(scope, quickCache.createCachedSettings())
 
     suspend fun update(settings: Settings) {
         if(settings.init) {
@@ -337,6 +346,7 @@ class SettingsStore(
 
             preferences[MODES] = JsonInstant.encodeToString(settingsToSave.modes)
             preferences[LOREBOOKS] = JsonInstant.encodeToString(settingsToSave.lorebooks)
+            preferences[TEXT_SELECTION_CONFIG] = JsonInstant.encodeToString(settingsToSave.textSelectionConfig)
         }
     }
 
@@ -345,6 +355,22 @@ class SettingsStore(
     }
 
     suspend fun updateAssistant(assistantId: Uuid) {
+        // Update in-memory state immediately to avoid race conditions
+        val current = settingsFlow.value
+        if (!current.init && current.assistants.any { it.id == assistantId }) {
+            val updatedRecentlyUsed = buildList {
+                add(assistantId)
+                current.recentlyUsedAssistants
+                    .filter { it != assistantId }
+                    .take(2)
+                    .forEach { add(it) }
+            }
+            settingsFlow.value = current.copy(
+                assistantId = assistantId,
+                recentlyUsedAssistants = updatedRecentlyUsed
+            )
+        }
+        // Persist to DataStore
         dataStore.edit { preferences ->
             preferences[SELECT_ASSISTANT] = assistantId.toString()
         }
@@ -414,6 +440,8 @@ data class Settings(
     // Prompt Injections
     val modes: List<Mode> = emptyList(),
     val lorebooks: List<Lorebook> = emptyList(),
+    // Android Integration
+    val textSelectionConfig: TextSelectionConfig = TextSelectionConfig(),
 ) {
     companion object {
         // 构造一个用于初始化的settings, 但它不能用于保存，防止使用初始值存储
@@ -455,6 +483,7 @@ enum class TtsFilterMode {
 data class DisplaySetting(
     val userAvatar: Avatar = Avatar.Dummy,
     val userNickname: String = "",
+    val chatInputStyle: ChatInputStyle = ChatInputStyle.FLOATING, // Input bar style (floating toolbar or minimal)
     val showUserAvatar: Boolean = true,
     val showModelIcon: Boolean = true,
     val showModelName: Boolean = true,
@@ -475,12 +504,38 @@ data class DisplaySetting(
     val rpStyleRules: List<RpStyleRule> = emptyList(), // Custom RP text styling rules
     val ttsTextFilterRules: List<TtsTextFilterRule> = emptyList(), // TTS text filter rules
     val providerViewMode: ProviderViewMode = ProviderViewMode.LIST, // Provider page view mode
+    val showContextStacks: Boolean = false, // Show context sources (modes, memories, lorebooks) in message toolbar
+    // New chat customization
+    val newChatHeaderStyle: NewChatHeaderStyle = NewChatHeaderStyle.GREETING, // Header for empty new chats
+    val newChatContentStyle: NewChatContentStyle = NewChatContentStyle.ACTIONS, // Content for empty new chats
+    val newChatShowAvatar: Boolean = true, // Show avatar in header (true) or top-right corner (false)
 )
+
+@Serializable
+enum class NewChatHeaderStyle {
+    NONE,       // Empty header
+    GREETING,   // Small avatar left of greeting
+    BIG_ICON    // Big avatar with name below (no greeting)
+}
+
+@Serializable
+enum class NewChatContentStyle {
+    NONE,       // Empty content
+    TEMPLATES,  // Template cards (Write, Code, etc.)
+    STATS,      // Stats widgets (streak, chats, avg msgs)
+    ACTIONS     // ChatGPT-style pill buttons with navigation (Create image, Translate, Code, More)
+}
 
 @Serializable
 enum class ProviderViewMode {
     LIST,
     GRID
+}
+
+@Serializable
+enum class ChatInputStyle {
+    FLOATING,   // "LastChat" - current floating toolbar
+    MINIMAL     // "Minimal" - ChatGPT-style simple bar with bottom sheet picker
 }
 
 @Serializable
@@ -528,6 +583,30 @@ fun Settings.getCurrentAssistant(): Assistant {
 
 fun Settings.getAssistantById(id: Uuid): Assistant? {
     return this.assistants.find { it.id == id }
+}
+
+/**
+ * Get effective display settings by merging assistant's UI overrides with global display settings.
+ * Per-assistant settings take precedence when set (non-null).
+ */
+fun Settings.getEffectiveDisplaySetting(assistant: Assistant? = null): DisplaySetting {
+    val ui = (assistant ?: getCurrentAssistant()).uiSettings
+    return displaySetting.copy(
+        chatInputStyle = ui.chatInputStyle ?: displaySetting.chatInputStyle,
+        showUserAvatar = ui.showUserAvatar ?: displaySetting.showUserAvatar,
+        showModelIcon = ui.showAssistantAvatar ?: displaySetting.showModelIcon,
+        showTokenUsage = ui.showTokenUsage ?: displaySetting.showTokenUsage,
+        autoCloseThinking = ui.autoCloseThinking ?: displaySetting.autoCloseThinking,
+        showMessageJumper = ui.showMessageJumper ?: displaySetting.showMessageJumper,
+        messageJumperOnLeft = ui.messageJumperOnLeft ?: displaySetting.messageJumperOnLeft,
+        fontSizeRatio = ui.fontSizeRatio ?: displaySetting.fontSizeRatio,
+        codeBlockAutoWrap = ui.codeBlockAutoWrap ?: displaySetting.codeBlockAutoWrap,
+        codeBlockAutoCollapse = ui.codeBlockAutoCollapse ?: displaySetting.codeBlockAutoCollapse,
+        showContextStacks = ui.showContextStacks ?: displaySetting.showContextStacks,
+        newChatHeaderStyle = ui.newChatHeaderStyle ?: displaySetting.newChatHeaderStyle,
+        newChatContentStyle = ui.newChatContentStyle ?: displaySetting.newChatContentStyle,
+        newChatShowAvatar = ui.newChatShowAvatar ?: displaySetting.newChatShowAvatar,
+    )
 }
 
 fun Settings.getSelectedTTSProvider(): TTSProviderSetting? {

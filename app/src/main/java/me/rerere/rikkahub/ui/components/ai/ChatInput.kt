@@ -16,6 +16,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.content.MediaType
@@ -24,6 +25,8 @@ import androidx.compose.foundation.content.consume
 import androidx.compose.foundation.content.contentReceiver
 import androidx.compose.foundation.content.hasMediaType
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -66,7 +69,11 @@ import androidx.compose.material3.LocalAbsoluteTonalElevation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Surface
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import me.rerere.rikkahub.ui.components.ui.HapticSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -82,9 +89,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -98,9 +111,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import me.rerere.ai.provider.BuiltInTools
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.window.DialogProperties
@@ -125,8 +142,11 @@ import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.ClearAll
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.ui.draw.rotate
 import me.rerere.rikkahub.ui.components.ui.ToastType
 import me.rerere.rikkahub.ui.components.crop.CropImageScreen
@@ -152,6 +172,7 @@ import me.rerere.rikkahub.ui.context.LocalSettings
 import me.rerere.rikkahub.ui.context.LocalToaster
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import me.rerere.rikkahub.ui.hooks.ChatInputState
+import me.rerere.rikkahub.service.ChatService
 import me.rerere.rikkahub.ui.hooks.rememberAmoledDarkMode
 import me.rerere.rikkahub.ui.hooks.rememberPremiumHaptics
 import me.rerere.rikkahub.ui.hooks.HapticPattern
@@ -196,6 +217,8 @@ fun ChatInput(
     onCancelClick: () -> Unit,
     onSendClick: () -> Unit,
     onLongSendClick: () -> Unit,
+    onNavigateToLorebook: (String) -> Unit = {},
+    onRefreshContext: suspend () -> ChatService.ContextRefreshResult = { ChatService.ContextRefreshResult(false, errorMessage = "Not configured") },
 ) {
     val context = LocalContext.current
     val toaster = LocalToaster.current
@@ -230,13 +253,14 @@ fun ChatInput(
         }
     }
 
-    // Collapse when ime is visible
-    val imeVisile = WindowInsets.isImeVisible
+    // Collapse when ime is hidden - always clear focus to show pickers
+    val imeVisible = WindowInsets.isImeVisible
     val focusManager = LocalFocusManager.current
-    LaunchedEffect(imeVisile) {
-        if (imeVisile) {
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
             expand = ExpandState.Collapsed
-        } else if (state.textContent.text.isEmpty()) {
+        } else {
+            // Always clear focus when keyboard closes to collapse toolbar
             focusManager.clearFocus()
         }
     }
@@ -244,8 +268,9 @@ fun ChatInput(
     // Focus state for the text field
     var isFocused by remember { mutableStateOf(false) }
     
-    // Expanded state logic: Expanded if focused OR text is not empty
-    val isExpanded = isFocused || state.textContent.text.isNotEmpty()
+    // Expanded state logic: Expanded ONLY when focused (keyboard open)
+    // When collapsed with text, show pickers and single-line text preview
+    val isExpanded = isFocused
 
     Box(
         modifier = modifier.fillMaxWidth(), // Apply passed modifier (alignment) here
@@ -359,10 +384,31 @@ fun ChatInput(
                     }
 
                     // Search & Reasoning (Visible when NOT expanded)
+                    // Delayed appearance - slight overlap with height animation for smoother feel
+                    var showPickers by remember { mutableStateOf(false) }
+                    LaunchedEffect(isExpanded) {
+                        if (!isExpanded) {
+                            // Start showing buttons while height is still animating (100ms overlap)
+                            kotlinx.coroutines.delay(100)
+                            showPickers = true
+                        } else {
+                            // Hide immediately when expanding
+                            showPickers = false
+                        }
+                    }
+                    
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = !isExpanded,
-                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandHorizontally(),
-                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkHorizontally()
+                        visible = showPickers,
+                        enter = androidx.compose.animation.fadeIn(
+                            animationSpec = androidx.compose.animation.core.tween(150)
+                        ) + androidx.compose.animation.expandHorizontally(
+                            animationSpec = androidx.compose.animation.core.tween(200, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                        ),
+                        exit = androidx.compose.animation.fadeOut(
+                            animationSpec = androidx.compose.animation.core.tween(100)
+                        ) + androidx.compose.animation.shrinkHorizontally(
+                            animationSpec = androidx.compose.animation.core.tween(150)
+                        )
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -448,8 +494,10 @@ fun ChatInput(
                                         onFocusChange = { isFocused = it },
                                         trailingIcon = {
                                             // Crossfade between Model Picker and Send Button
+                                            // Send button shows ONLY when keyboard is open (focused) AND has content, or loading
+                                            val showSendButton = state.loading || (isFocused && !state.isEmpty())
                                             androidx.compose.animation.AnimatedContent(
-                                                targetState = !state.isEmpty() || state.loading,
+                                                targetState = showSendButton,
                                                 transitionSpec = {
                                                     androidx.compose.animation.fadeIn(
                                                         animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 400f)
@@ -559,9 +607,10 @@ fun ChatInput(
                     dismissExpand()
                 }
                 if (expand == ExpandState.Files) {
+                    // Optical roundness: outer radius (40dp) = inner button corners (24dp) + padding (16dp)
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = me.rerere.rikkahub.ui.theme.AppShapes.CardLarge,
+                        shape = RoundedCornerShape(40.dp),
                         color = if (LocalDarkMode.current) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerLow,
                         tonalElevation = 8.dp
                     ) {
@@ -572,6 +621,8 @@ fun ChatInput(
                             onClearContext = onClearContext,
                             onUpdateAssistant = onUpdateAssistant,
                             onUpdateConversation = onUpdateConversation,
+                            onNavigateToLorebook = onNavigateToLorebook,
+                            onRefreshContext = onRefreshContext,
                             onDismiss = { dismissExpand() }
                         )
                     }
@@ -654,29 +705,159 @@ private fun TextInputRow(
                     }
                 }
             }
-            TextField(
-                state = state.textContent,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight()
-                    .contentReceiver(receiveContentListener)
-                    .onFocusChanged {
-                        onFocusChange(it.isFocused)
-                    },
-                shape = RoundedCornerShape(20.dp),
-                placeholder = {
-                    Text(stringResource(R.string.chat_input_placeholder))
+            // Always use MultiLine to preserve Enter key for newlines
+            // Use animated height constraint for visual collapse
+            val hasText = state.textContent.text.isNotEmpty()
+            
+            // Use imeVisible (keyboard state) for animation target - more stable than focus state
+            val imeVisibleLocal = WindowInsets.isImeVisible
+            
+            // Get container color for fade gradient (matches inner capsule with tonal elevation)
+            val amoledModeLocal by rememberAmoledDarkMode()
+            val fadeColor = if (amoledModeLocal && LocalDarkMode.current) {
+                Color.Black
+            } else {
+                // Use the elevated surface color to match the actual Surface appearance
+                MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp)
+            }
+            
+            // Collapsed state: keyboard hidden
+            val isCollapsed = !imeVisibleLocal
+            
+            // Check if text would need multiple lines (approx > 40 chars per line)
+            val hasMultiLineContent = hasText && state.textContent.text.length > 40
+            
+            // Animated height with spring physics - only animate for multi-line content
+            val animatedMaxHeight by animateDpAsState(
+                targetValue = if (isCollapsed) 56.dp else 200.dp,
+                animationSpec = if (hasMultiLineContent) {
+                    spring(
+                        dampingRatio = 0.85f,
+                        stiffness = 400f
+                    )
+                } else {
+                    spring(
+                        dampingRatio = 1.0f,  // Critically damped - no visible animation for single line
+                        stiffness = 1000f
+                    )
                 },
-                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 5),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 16.dp), // Increased padding for centering
-                colors = TextFieldDefaults.colors().copy(
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                ),
-                trailingIcon = trailingIcon
+                label = "text_height"
             )
+            
+            // Animated alpha for fade overlay - appears when collapsed with text
+            val fadeAlpha by animateFloatAsState(
+                targetValue = if (isCollapsed && hasText) 1f else 0f,
+                animationSpec = spring(
+                    dampingRatio = 0.8f,
+                    stiffness = 400f
+                ),
+                label = "fade_alpha"
+            )
+            
+            // Animated fade width - expands when collapsed with text
+            val fadeWidth by animateDpAsState(
+                targetValue = if (isCollapsed && hasText) 60.dp else 0.dp,
+                animationSpec = spring(
+                    dampingRatio = 0.75f,
+                    stiffness = 350f
+                ),
+                label = "fade_width"
+            )
+            
+            // Delayed lineLimits state - waits for height animation before switching to SingleLine
+            // This prevents text from reflowing mid-animation
+            // outputTransformation handles newlines by replacing them with spaces visually
+            var useSingleLine by remember { mutableStateOf(false) }
+            LaunchedEffect(isCollapsed) {
+                if (isCollapsed) {
+                    // Wait for height animation to mostly complete before switching to SingleLine
+                    kotlinx.coroutines.delay(180)
+                    useSingleLine = true
+                } else {
+                    // Immediately switch to MultiLine when expanding for smooth typing
+                    useSingleLine = false
+                }
+            }
+            
+            // Box with animated height constraint and gradient fade mask
+            Box(
+                modifier = Modifier
+                    .heightIn(max = animatedMaxHeight)
+                    .clipToBounds()
+                    .drawWithContent {
+                        // Draw the content first
+                        drawContent()
+                        
+                        // Only draw the fade overlay when collapsed (keyboard hidden) with text
+                        if (fadeWidth > 0.dp) {
+                            // Draw a gradient overlay on the right side (before trailing icon)
+                            val fadeWidthPx = fadeWidth.toPx()
+                            // Position gradient to end just before the trailing icon starts
+                            val endX = size.width - 48.dp.toPx() // trailing icon area
+                            val startX = endX - fadeWidthPx
+                            
+                            drawRect(
+                                brush = Brush.horizontalGradient(
+                                    colors = listOf(
+                                        fadeColor.copy(alpha = 0f),
+                                        fadeColor
+                                    ),
+                                    startX = startX,
+                                    endX = endX
+                                ),
+                                topLeft = Offset(startX, 0f),
+                                size = Size(fadeWidthPx, size.height)
+                            )
+                        }
+                    }
+            ) {
+                TextField(
+                    state = state.textContent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .focusRequester(state.focusRequester)
+                        .contentReceiver(receiveContentListener)
+                        .onFocusChanged {
+                            onFocusChange(it.isFocused)
+                        },
+                    shape = RoundedCornerShape(20.dp),
+                    placeholder = {
+                        Text(stringResource(R.string.chat_input_placeholder))
+                    },
+                    // Use SingleLine when collapsed to prevent word wrapping (text extends horizontally)
+                    // Use MultiLine when expanded (keyboard open) for normal editing
+                    // Uses delayed useSingleLine state for smooth animation transition
+                    lineLimits = if (useSingleLine) {
+                        TextFieldLineLimits.SingleLine
+                    } else {
+                        TextFieldLineLimits.MultiLine(maxHeightInLines = 5)
+                    },
+                    // When collapsed (SingleLine), visually replace newlines with spaces
+                    // This allows SingleLine mode even when text contains newlines
+                    outputTransformation = if (useSingleLine) {
+                        androidx.compose.foundation.text.input.OutputTransformation {
+                            // Replace newlines with spaces for visual display only
+                            val text = asCharSequence().toString()
+                            if (text.contains('\n')) {
+                                replace(0, length, text.replace('\n', ' '))
+                            }
+                        }
+                    } else null,
+                    // Keep Enter key as newline (not action/done) - ImeAction.None disables the action key
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.None
+                    ),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                    colors = TextFieldDefaults.colors().copy(
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                    ),
+                    trailingIcon = trailingIcon
+                )
+            }
             if (isFullScreen) {
                 FullScreenEditor(state = state) {
                     isFullScreen = false
@@ -967,26 +1148,47 @@ private fun ChatSuggestionsRow(
 }
 
 @Composable
-private fun FilesPicker(
+internal fun FilesPicker(
     conversation: Conversation,
     assistant: Assistant,
     state: ChatInputState,
     onClearContext: () -> Unit,
     onUpdateAssistant: (Assistant) -> Unit,
     onUpdateConversation: (Conversation) -> Unit,
+    onNavigateToLorebook: (String) -> Unit,
+    onRefreshContext: suspend () -> ChatService.ContextRefreshResult,
     onDismiss: () -> Unit
 ) {
     val settings = LocalSettings.current
     val amoledMode by rememberAmoledDarkMode()
     val provider = settings.getCurrentChatModel()?.findProvider(providers = settings.providers)
     
-    // Position-based corner shapes for 2x2 grid
-    val topLeftShape = RoundedCornerShape(topStart = 24.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 10.dp)
-    val topRightShape = RoundedCornerShape(topStart = 10.dp, topEnd = 24.dp, bottomStart = 10.dp, bottomEnd = 10.dp)
-    val bottomLeftShape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 24.dp, bottomEnd = 10.dp)
-    val bottomRightShape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 24.dp)
-    // For single item in row
+    val isDarkMode = LocalDarkMode.current
+    val isKeyboardVisible = WindowInsets.isImeVisible
+    val showContextRefresh = assistant.enableContextRefresh && !isKeyboardVisible
+    
+    // Shapes for 3-button row - different based on keyboard visibility
+    val topLeftShape = if (isKeyboardVisible) {
+        RoundedCornerShape(topStart = 24.dp, topEnd = 10.dp, bottomStart = 24.dp, bottomEnd = 10.dp)
+    } else {
+        RoundedCornerShape(topStart = 24.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 10.dp)
+    }
+    val topMiddleShape = RoundedCornerShape(10.dp)
+    val topRightShape = if (isKeyboardVisible) {
+        RoundedCornerShape(topStart = 10.dp, topEnd = 24.dp, bottomStart = 10.dp, bottomEnd = 24.dp)
+    } else {
+        RoundedCornerShape(topStart = 10.dp, topEnd = 24.dp, bottomStart = 10.dp, bottomEnd = 10.dp)
+    }
+    // Shapes for modes/lorebooks row - middle if context refresh enabled, bottom if not
+    val middleLeftShape = RoundedCornerShape(10.dp)
+    val middleRightShape = RoundedCornerShape(10.dp)
+    val bottomLeftShape = if (showContextRefresh) middleLeftShape else RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 24.dp, bottomEnd = 10.dp)
+    val bottomRightShape = if (showContextRefresh) middleRightShape else RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 24.dp)
+    // Full-width bottom row shape for context refresh
     val fullBottomShape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+    
+    // State for context refresh dialog
+    var showContextRefreshDialog by remember { mutableStateOf(false) }
     
     Column(
         modifier = Modifier
@@ -994,84 +1196,36 @@ private fun FilesPicker(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        val supportVideo = provider != null && provider is ProviderSetting.Google
-        if(supportVideo) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        TakePicButton(shape = topLeftShape) {
-                            state.addImages(it)
-                            onDismiss()
-                        }
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        ImagePickButton(shape = topRightShape) {
-                            state.addImages(it)
-                            onDismiss()
-                        }
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        VideoPickButton(shape = bottomLeftShape) {
-                            state.addVideos(it)
-                            onDismiss()
-                        }
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        FilePickButton(shape = bottomRightShape) {
-                            state.addFiles(it)
-                            onDismiss()
-                        }
-                    }
+        // File upload buttons row: Capture, Photo Library, Files
+        Row(
+            modifier = Modifier.fillMaxWidth().height(80.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                TakePicButton(shape = topLeftShape) {
+                    state.addImages(it)
+                    onDismiss()
                 }
             }
-        } else {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        TakePicButton(shape = topLeftShape) {
-                            state.addImages(it)
-                            onDismiss()
-                        }
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        ImagePickButton(shape = topRightShape) {
-                            state.addImages(it)
-                            onDismiss()
-                        }
-                    }
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                ImagePickButton(shape = topMiddleShape) {
+                    state.addImages(it)
+                    onDismiss()
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        FilePickButton(shape = fullBottomShape) {
-                            state.addFiles(it)
-                            onDismiss()
-                        }
-                    }
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                FilePickButton(shape = topRightShape) {
+                    state.addFiles(it)
+                    onDismiss()
                 }
             }
         }
-
-        if (!WindowInsets.isImeVisible) {
-            Spacer(modifier = Modifier.height(8.dp))
-
+        
+        // Modes and Lorebooks row - hidden when keyboard is visible
+        var showModesPicker by remember { mutableStateOf(false) }
+        var showLorebooksPicker by remember { mutableStateOf(false) }
+        
+        if (!isKeyboardVisible) {
             // Calculate active modes count from conversation
             val activeModeCount = settings.modes.count { mode ->
                 if (conversation.enabledModeIds.isEmpty()) {
@@ -1080,57 +1234,184 @@ private fun FilesPicker(
                     conversation.enabledModeIds.contains(mode.id)
                 }
             }
-
-            var showModesPicker by remember { mutableStateOf(false) }
-
-            ListItem(
-                colors = ListItemDefaults.colors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                leadingContent = {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoFixHigh,
-                        contentDescription = stringResource(R.string.modes_picker_title),
-                    )
-                },
-                headlineContent = {
-                    Text(stringResource(R.string.modes_picker_title))
-                },
-                supportingContent = {
-                    Text(
-                        if (settings.modes.isEmpty()) {
-                            stringResource(R.string.modes_picker_none)
-                        } else {
-                            stringResource(R.string.modes_picker_count, activeModeCount)
+            
+            // Calculate active lorebooks count from assistant
+            val activeLorebookCount = assistant.enabledLorebookIds.size
+            
+            Row(
+                modifier = Modifier.fillMaxWidth().height(80.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Modes button (left half) - matches BigIconTextButton pattern
+                val modesActive = activeModeCount > 0
+                CompositionLocalProvider(LocalAbsoluteTonalElevation provides if(amoledMode && isDarkMode) 0.dp else LocalAbsoluteTonalElevation.current) {
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = bottomLeftShape,
+                        color = if (amoledMode && isDarkMode) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = if (amoledMode && isDarkMode) 0.dp else 6.dp,
+                        onClick = { showModesPicker = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AutoFixHigh,
+                                contentDescription = null,
+                                tint = if (modesActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.modes_picker_title),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (modesActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (settings.modes.isEmpty()) {
+                                        stringResource(R.string.modes_picker_none)
+                                    } else {
+                                        "$activeModeCount/${settings.modes.size}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                    )
-                },
-                trailingContent = {
-                    Icon(
-                        imageVector = Icons.Rounded.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                modifier = Modifier.clickable {
-                    showModesPicker = true
+                    }
                 }
-            )
 
-            // Modes picker sheet
-            if (showModesPicker) {
-                ModesPickerSheet(
-                    settings = settings,
-                    conversation = conversation,
-                    onUpdateConversation = onUpdateConversation,
-                    onDismiss = { showModesPicker = false }
-                )
+                // Lorebooks button (right half) - matches BigIconTextButton pattern
+                val lorebooksActive = activeLorebookCount > 0
+                CompositionLocalProvider(LocalAbsoluteTonalElevation provides if(amoledMode && isDarkMode) 0.dp else LocalAbsoluteTonalElevation.current) {
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = bottomRightShape,
+                        color = if (amoledMode && isDarkMode) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = if (amoledMode && isDarkMode) 0.dp else 6.dp,
+                        onClick = { showLorebooksPicker = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Book,
+                                contentDescription = null,
+                                tint = if (lorebooksActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.lorebooks_picker_title),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (lorebooksActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (settings.lorebooks.isEmpty()) {
+                                        stringResource(R.string.lorebooks_picker_none)
+                                    } else {
+                                        "$activeLorebookCount/${settings.lorebooks.size}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Context Refresh button row - shown when enabled
+            if (showContextRefresh) {
+                val totalMessages = conversation.currentMessages.size
+                val lastSummaryIndex = conversation.contextSummaryUpToIndex
+                val hasPreviousSummary = !conversation.contextSummary.isNullOrBlank() && lastSummaryIndex >= 0
+                val messagesToKeep = 2 // Keep last user+assistant exchange
+                val newMessageCount = if (hasPreviousSummary && lastSummaryIndex < totalMessages) {
+                    // Messages after last summary, minus the ones we keep
+                    (totalMessages - lastSummaryIndex - 1 - messagesToKeep).coerceAtLeast(0)
+                } else {
+                    // No previous summary - all messages minus kept ones
+                    (totalMessages - messagesToKeep).coerceAtLeast(0)
+                }
+                
+                CompositionLocalProvider(LocalAbsoluteTonalElevation provides if(amoledMode && isDarkMode) 0.dp else LocalAbsoluteTonalElevation.current) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = fullBottomShape,
+                        color = if (amoledMode && isDarkMode) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        tonalElevation = if (amoledMode && isDarkMode) 0.dp else 6.dp,
+                        onClick = { showContextRefreshDialog = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp).fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.context_refresh_button),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (newMessageCount > 0) {
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "($newMessageCount)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
+        // Modes picker sheet
+        if (showModesPicker) {
+            ModesPickerSheet(
+                settings = settings,
+                conversation = conversation,
+                onUpdateConversation = onUpdateConversation,
+                onDismiss = { showModesPicker = false }
+            )
+        }
+        
+        // Lorebooks picker sheet
+        if (showLorebooksPicker) {
+            LorebooksPickerSheet(
+                settings = settings,
+                assistant = assistant,
+                onUpdateAssistant = onUpdateAssistant,
+                onNavigateToLorebook = { lorebookId ->
+                    showLorebooksPicker = false
+                    onNavigateToLorebook(lorebookId)
+                },
+                onDismiss = { showLorebooksPicker = false }
+            )
+        }
+        
+        // Context Refresh confirmation dialog
+        if (showContextRefreshDialog) {
+            ContextRefreshDialog(
+                conversation = conversation,
+                onRefresh = onRefreshContext,
+                onDismiss = { showContextRefreshDialog = false }
+            )
+        }
     }
 }
-
 @Composable
 private fun FullScreenEditor(
     state: ChatInputState,
@@ -1496,7 +1777,7 @@ private fun BigIconTextButton(
             .semantics {
                 role = Role.Button
             }
-            .fillMaxWidth(),
+            .fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -1505,11 +1786,11 @@ private fun BigIconTextButton(
                 shape = shape,
                 color = if (amoledMode && LocalDarkMode.current) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = if (amoledMode && LocalDarkMode.current) 0.dp else 6.dp,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxSize()
             ) {
                 Box(
                     modifier = Modifier
-                        .padding(horizontal = 32.dp, vertical = 24.dp),
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     icon()
@@ -1534,13 +1815,17 @@ private fun BigIconTextButtonPreview() {
 }
 
 @Composable
-private fun ModesPickerSheet(
+internal fun ModesPickerSheet(
     settings: me.rerere.rikkahub.data.datastore.Settings,
     conversation: Conversation,
     onUpdateConversation: (Conversation) -> Unit,
     onDismiss: () -> Unit
 ) {
     val haptics = me.rerere.rikkahub.ui.hooks.rememberPremiumHaptics()
+    val amoledMode by rememberAmoledDarkMode()
+    val isDarkMode = LocalDarkMode.current
+    val cornerRadius = 28.dp
+    val smallCorner = 8.dp
     
     // Use local state for immediate UI feedback
     var localEnabledIds by remember(conversation.id) {
@@ -1553,15 +1838,34 @@ private fun ModesPickerSheet(
         )
     }
     
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    
     ModalBottomSheet(
-        onDismissRequest = onDismiss
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetGesturesEnabled = false,
+        dragHandle = {
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        sheetState.hide()
+                        onDismiss()
+                    }
+                }
+            ) {
+                Icon(Icons.Rounded.KeyboardArrowDown, null)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = stringResource(R.string.modes_picker_title),
@@ -1576,42 +1880,271 @@ private fun ModesPickerSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                settings.modes.forEach { mode ->
+                settings.modes.forEachIndexed { index, mode ->
                     // Use local state for isEnabled
                     val isEnabled = localEnabledIds.contains(mode.id)
                     
-                    ListItem(
-                        colors = ListItemDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        ),
-                        headlineContent = {
-                            Text(mode.name.ifEmpty { stringResource(R.string.modes_page_unnamed) })
-                        },
-                        supportingContent = {
-                            Text(
-                                text = mode.prompt.take(50) + if (mode.prompt.length > 50) "..." else "",
-                                maxLines = 1,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        },
-                        trailingContent = {
-                            HapticSwitch(
+                    // Calculate position for grouped card styling
+                    val position = when {
+                        settings.modes.size == 1 -> me.rerere.rikkahub.ui.components.ui.ItemPosition.ONLY
+                        index == 0 -> me.rerere.rikkahub.ui.components.ui.ItemPosition.FIRST
+                        index == settings.modes.lastIndex -> me.rerere.rikkahub.ui.components.ui.ItemPosition.LAST
+                        else -> me.rerere.rikkahub.ui.components.ui.ItemPosition.MIDDLE
+                    }
+                    
+                    // Calculate shape based on position (grouped cards)
+                    val shape = when (position) {
+                        me.rerere.rikkahub.ui.components.ui.ItemPosition.ONLY -> RoundedCornerShape(cornerRadius)
+                        me.rerere.rikkahub.ui.components.ui.ItemPosition.FIRST -> RoundedCornerShape(
+                            topStart = cornerRadius, topEnd = cornerRadius,
+                            bottomStart = smallCorner, bottomEnd = smallCorner
+                        )
+                        me.rerere.rikkahub.ui.components.ui.ItemPosition.MIDDLE -> RoundedCornerShape(smallCorner)
+                        me.rerere.rikkahub.ui.components.ui.ItemPosition.LAST -> RoundedCornerShape(
+                            topStart = smallCorner, topEnd = smallCorner,
+                            bottomStart = cornerRadius, bottomEnd = cornerRadius
+                        )
+                    }
+                    
+                    CompositionLocalProvider(LocalAbsoluteTonalElevation provides if(amoledMode && isDarkMode) 0.dp else LocalAbsoluteTonalElevation.current) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (amoledMode && isDarkMode) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh
+                            ),
+                            shape = shape
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 80.dp)
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Mode content
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = mode.name.ifEmpty { stringResource(R.string.modes_page_unnamed) },
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = mode.prompt.take(50) + if (mode.prompt.length > 50) "..." else "",
+                                        maxLines = 1,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                // Switch
+                                HapticSwitch(
+                                    checked = isEnabled,
+                                    onCheckedChange = { newEnabled ->
+                                        val newEnabledIds = if (newEnabled) {
+                                            localEnabledIds + mode.id
+                                        } else {
+                                            localEnabledIds - mode.id
+                                        }
+                                        // Update local state immediately for UI feedback
+                                        localEnabledIds = newEnabledIds
+                                        // Persist change via callback
+                                        onUpdateConversation(conversation.copy(enabledModeIds = newEnabledIds))
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun LorebooksPickerSheet(
+    settings: me.rerere.rikkahub.data.datastore.Settings,
+    assistant: Assistant,
+    onUpdateAssistant: (Assistant) -> Unit,
+    onNavigateToLorebook: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val haptics = me.rerere.rikkahub.ui.hooks.rememberPremiumHaptics()
+    val amoledMode by rememberAmoledDarkMode()
+    val isDarkMode = LocalDarkMode.current
+    
+    // Use local state for immediate UI feedback
+    var localEnabledIds by remember(assistant.id) {
+        mutableStateOf(assistant.enabledLorebookIds)
+    }
+    
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        sheetGesturesEnabled = false,
+        dragHandle = {
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        sheetState.hide()
+                        onDismiss()
+                    }
+                }
+            ) {
+                Icon(Icons.Rounded.KeyboardArrowDown, null)
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.lorebooks_picker_title),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            if (settings.lorebooks.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.lorebooks_picker_none),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                settings.lorebooks.forEachIndexed { index, lorebook ->
+                    val isEnabled = localEnabledIds.contains(lorebook.id)
+                    
+                    // Calculate position for connected card styling
+                    val position = when {
+                        settings.lorebooks.size == 1 -> me.rerere.rikkahub.ui.components.ui.ItemPosition.ONLY
+                        index == 0 -> me.rerere.rikkahub.ui.components.ui.ItemPosition.FIRST
+                        index == settings.lorebooks.lastIndex -> me.rerere.rikkahub.ui.components.ui.ItemPosition.LAST
+                        else -> me.rerere.rikkahub.ui.components.ui.ItemPosition.MIDDLE
+                    }
+                    
+                    // Calculate shape based on position (grouped cards)
+                    val cornerRadius = 28.dp
+                    val smallCorner = 8.dp
+                    val shape = when (position) {
+                        me.rerere.rikkahub.ui.components.ui.ItemPosition.ONLY -> RoundedCornerShape(cornerRadius)
+                        me.rerere.rikkahub.ui.components.ui.ItemPosition.FIRST -> RoundedCornerShape(
+                            topStart = cornerRadius, topEnd = cornerRadius,
+                            bottomStart = smallCorner, bottomEnd = smallCorner
+                        )
+                        me.rerere.rikkahub.ui.components.ui.ItemPosition.MIDDLE -> RoundedCornerShape(smallCorner)
+                        me.rerere.rikkahub.ui.components.ui.ItemPosition.LAST -> RoundedCornerShape(
+                            topStart = smallCorner, topEnd = smallCorner,
+                            bottomStart = cornerRadius, bottomEnd = cornerRadius
+                        )
+                    }
+                    
+                    CompositionLocalProvider(LocalAbsoluteTonalElevation provides if(amoledMode && isDarkMode) 0.dp else LocalAbsoluteTonalElevation.current) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (amoledMode && isDarkMode) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh
+                            ),
+                            shape = shape,
+                            onClick = { onNavigateToLorebook(lorebook.id.toString()) }
+                        ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Book cover or letter fallback
+                            val bookShape = when (position) {
+                                me.rerere.rikkahub.ui.components.ui.ItemPosition.ONLY -> RoundedCornerShape(
+                                    topStart = 16.dp, topEnd = 6.dp,
+                                    bottomStart = 16.dp, bottomEnd = 6.dp
+                                )
+                                me.rerere.rikkahub.ui.components.ui.ItemPosition.FIRST -> RoundedCornerShape(
+                                    topStart = 16.dp, topEnd = 6.dp,
+                                    bottomStart = 6.dp, bottomEnd = 6.dp
+                                )
+                                me.rerere.rikkahub.ui.components.ui.ItemPosition.MIDDLE -> RoundedCornerShape(6.dp)
+                                me.rerere.rikkahub.ui.components.ui.ItemPosition.LAST -> RoundedCornerShape(
+                                    topStart = 6.dp, topEnd = 6.dp,
+                                    bottomStart = 16.dp, bottomEnd = 6.dp
+                                )
+                            }
+                            Surface(
+                                shape = bookShape,
+                                color = if (isEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.size(width = 40.dp, height = 56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    when (val cover = lorebook.cover) {
+                                        is me.rerere.rikkahub.data.model.Avatar.Image -> {
+                                            AsyncImage(
+                                                model = cover.url,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                            )
+                                        }
+                                        is me.rerere.rikkahub.data.model.Avatar.Emoji -> {
+                                            Text(
+                                                text = cover.content,
+                                                fontSize = 20.sp
+                                            )
+                                        }
+                                        else -> {
+                                            // Letter fallback
+                                            Text(
+                                                text = lorebook.name.take(1).uppercase().ifEmpty { "L" },
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = if (isEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Lorebook info
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = lorebook.name.ifEmpty { stringResource(R.string.lorebooks_page_unnamed) },
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = stringResource(R.string.lorebooks_page_entries_count, lorebook.entries.size),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            // Toggle
+                            me.rerere.rikkahub.ui.components.ui.HapticSwitch(
                                 checked = isEnabled,
                                 onCheckedChange = { newEnabled ->
-                                    val newEnabledIds = if (newEnabled) {
-                                        localEnabledIds + mode.id
+                                    val newIds = if (newEnabled) {
+                                        localEnabledIds + lorebook.id
                                     } else {
-                                        localEnabledIds - mode.id
+                                        localEnabledIds - lorebook.id
                                     }
                                     // Update local state immediately for UI feedback
-                                    localEnabledIds = newEnabledIds
+                                    localEnabledIds = newIds
                                     // Persist change via callback
-                                    onUpdateConversation(conversation.copy(enabledModeIds = newEnabledIds))
+                                    onUpdateAssistant(assistant.copy(enabledLorebookIds = newIds))
                                 }
                             )
-                        },
-                        modifier = Modifier.clip(RoundedCornerShape(10.dp))
-                    )
+                        }
+                        }
+                    }
                 }
             }
         }

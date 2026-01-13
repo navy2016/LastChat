@@ -11,3 +11,6 @@ local.properties
 .cursor
 .history
 .kotlin
+build_log.txt
+build_output.txt
+/helloagents

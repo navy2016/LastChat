@@ -255,7 +255,7 @@ class ChatCompletionsAPI(
         val host = providerSetting.baseUrl.toHttpUrl().host
         return buildJsonObject {
             put("model", params.model.modelId)
-            put("messages", buildMessages(messages))
+            put("messages", buildMessages(messages, host))
 
             if (isModelAllowTemperature(params.model)) {
                 if (params.temperature != null) put("temperature", params.temperature)
@@ -265,7 +265,8 @@ class ChatCompletionsAPI(
 
             put("stream", stream)
             if (stream) {
-                if (host != "api.mistral.ai") { // mistral 不支持 stream_options
+                // Some providers don't support stream_options
+                if (host != "api.mistral.ai" && host != "open.bigmodel.cn") {
                     put("stream_options", buildJsonObject {
                         put("include_usage", true)
                     })
@@ -369,7 +370,7 @@ class ChatCompletionsAPI(
         return !ModelRegistry.OPENAI_O_MODELS.match(model.modelId) && !ModelRegistry.GPT_5.match(model.modelId)
     }
 
-    private fun buildMessages(messages: List<UIMessage>) = buildJsonArray {
+    private fun buildMessages(messages: List<UIMessage>, host: String) = buildJsonArray {
         messages
             .filter {
                 it.isValidToUpload()
@@ -381,7 +382,12 @@ class ChatCompletionsAPI(
                             put("role", "tool")
                             put("name", result.toolName)
                             put("tool_call_id", result.toolCallId)
-                            put("content", json.encodeToString(result.content))
+                            // Zhipu AI requires content to be a JSON object, not a string
+                            if (host == "open.bigmodel.cn") {
+                                put("content", result.content)
+                            } else {
+                                put("content", json.encodeToString(result.content))
+                            }
                         })
                     }
                     return@forEachIndexed

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.SharedTransitionLayout
@@ -24,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -45,6 +47,8 @@ import okio.Path.Companion.toOkioPath
 import me.rerere.rikkahub.ui.components.ui.AppToasterHost
 import me.rerere.rikkahub.ui.components.ui.rememberAppToasterState
 import kotlinx.serialization.Serializable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filterNotNull
 import me.rerere.highlight.Highlighter
 import me.rerere.highlight.LocalHighlighter
 import me.rerere.rikkahub.data.datastore.SettingsStore
@@ -83,21 +87,40 @@ import me.rerere.rikkahub.ui.pages.setting.SettingLorebookDetailPage
 import me.rerere.rikkahub.ui.pages.share.handler.ShareHandlerPage
 import me.rerere.rikkahub.ui.pages.translator.TranslatorPage
 import me.rerere.rikkahub.ui.pages.webview.WebViewPage
+import me.rerere.rikkahub.ui.pages.setting.SettingAndroidIntegrationPage
+import me.rerere.rikkahub.ui.pages.setting.SettingUICustomizationPage
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import okhttp3.OkHttpClient
 import org.koin.android.ext.android.inject
 import me.rerere.rikkahub.utils.fileSizeToString
+import me.rerere.rikkahub.utils.base64Encode
 import kotlin.uuid.Uuid
 
 private const val TAG = "RouteActivity"
+
+/**
+ * Data class to hold text selection intent data for navigation
+ */
+data class TextSelectionData(
+    val navigateTo: String?,
+    val selectedText: String?,
+    val aiResponse: String?,
+    val userPrompt: String?,
+    val translatorInput: String?,
+    val translatorOutput: String?,
+    val selectionAssistantId: String?
+)
 
 class RouteActivity : ComponentActivity() {
     private val highlighter by inject<Highlighter>()
     private val okHttpClient by inject<OkHttpClient>()
     private val settingsStore by inject<SettingsStore>()
+    private val chatService by inject<me.rerere.rikkahub.service.ChatService>()
     private var navStack by mutableStateOf<NavHostController?>(null)
     private var pendingAssistantId by mutableStateOf<String?>(null)
+    private var pendingTextSelection by mutableStateOf<TextSelectionData?>(null)
+    private var pendingConversationId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -105,14 +128,31 @@ class RouteActivity : ComponentActivity() {
         disableNavigationBarContrast()
         super.onCreate(savedInstanceState)
         
-        // Check for assistant shortcut intent
-        pendingAssistantId = intent?.getStringExtra("assistantId")
+        // Store intent data - will be processed AFTER composition is ready
+        val intentAssistantId = intent?.getStringExtra("assistantId")
+        val intentConversationId = intent?.getStringExtra("conversationId")
+        
+        // Check for text selection intent
+        val navigateTo = intent?.getStringExtra("navigate_to")
+        val continueConversation = intent?.getBooleanExtra("continue_conversation", false) ?: false
+        if (navigateTo == "translator" || continueConversation) {
+            pendingTextSelection = TextSelectionData(
+                navigateTo = navigateTo,
+                selectedText = intent?.getStringExtra("selected_text"),
+                aiResponse = intent?.getStringExtra("ai_response"),
+                userPrompt = intent?.getStringExtra("user_prompt"),
+                translatorInput = intent?.getStringExtra("translator_input"),
+                translatorOutput = intent?.getStringExtra("translator_output"),
+                selectionAssistantId = intent?.getStringExtra("selection_assistant_id")
+            )
+        }
         
         setContent {
             val navStack = rememberNavController()
             this.navStack = navStack
             ShareHandler(navStack)
-            AssistantShortcutHandler(navStack)
+            TextSelectionHandler(navStack)
+            NotificationHandler(navStack)
             RikkahubTheme {
                 setSingletonImageLoaderFactory { context ->
                     ImageLoader.Builder(context)
@@ -137,6 +177,32 @@ class RouteActivity : ComponentActivity() {
                 AppRoutes(navStack)
             }
         }
+        
+        // Handle assistant shortcut - navigate directly by waiting for navStack to be ready
+        if (intentAssistantId != null) {
+            lifecycleScope.launch {
+                // Wait for navStack to be ready (set in composition)
+                while (navStack == null) {
+                    kotlinx.coroutines.delay(50)
+                }
+                try {
+                    val assistantId = Uuid.parse(intentAssistantId)
+                    // Update the selected assistant
+                    settingsStore.updateAssistant(assistantId)
+                    // Mark as recently used
+                    settingsStore.markAssistantUsed(assistantId)
+                    // Navigate to a new chat
+                    navStack?.navigate(Screen.Chat(Uuid.random().toString())) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+        if (intentConversationId != null) {
+            pendingConversationId = intentConversationId
+        }
     }
 
     private fun disableNavigationBarContrast() {
@@ -145,28 +211,7 @@ class RouteActivity : ComponentActivity() {
         }
     }
     
-    @Composable
-    private fun AssistantShortcutHandler(navBackStack: NavHostController) {
-        val assistantIdStr = pendingAssistantId
-        LaunchedEffect(assistantIdStr) {
-            if (assistantIdStr != null) {
-                pendingAssistantId = null
-                try {
-                    val assistantId = Uuid.parse(assistantIdStr)
-                    // Update the selected assistant
-                    settingsStore.updateAssistant(assistantId)
-                    // Mark as recently used
-                    settingsStore.markAssistantUsed(assistantId)
-                    // Navigate to a new chat
-                    navBackStack.navigate(Screen.Chat(Uuid.random().toString())) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
-    }
+    // AssistantShortcutHandler removed - shortcuts now handled directly in onCreate/onNewIntent
 
     @Composable
     private fun ShareHandler(navBackStack: NavHostController) {
@@ -187,15 +232,123 @@ class RouteActivity : ComponentActivity() {
         }
     }
 
+    @Composable
+    private fun NotificationHandler(navBackStack: NavHostController) {
+        val conversationIdStr = pendingConversationId
+        LaunchedEffect(conversationIdStr) {
+            if (conversationIdStr != null) {
+                pendingConversationId = null
+                navBackStack.navigate(Screen.Chat(conversationIdStr))
+            }
+        }
+    }
+
+    @Composable
+    private fun TextSelectionHandler(navBackStack: NavHostController) {
+        val data = pendingTextSelection
+        val settings by settingsStore.settingsFlow.collectAsStateWithLifecycle()
+        
+        
+        LaunchedEffect(data) {
+            if (data != null) {
+                pendingTextSelection = null
+                try {
+                    when (data.navigateTo) {
+                        "translator" -> {
+                            // Navigate to Translator page
+                            navBackStack.navigate(Screen.Translator)
+                        }
+                        else -> {
+                            // Create a new conversation with pre-existing messages
+                            val conversationId = Uuid.random()
+                            
+                            // Create user message with selected text
+                            val userContent = buildString {
+                                if (!data.selectedText.isNullOrBlank()) {
+                                    append(data.selectedText)
+                                }
+                                if (!data.userPrompt.isNullOrBlank()) {
+                                    append("\n\n")
+                                    append(data.userPrompt)
+                                }
+                            }
+                            
+                            val messages = mutableListOf<me.rerere.rikkahub.data.model.MessageNode>()
+                            
+                            // Add user message if there's content
+                            if (userContent.isNotBlank()) {
+                                val userMessage = me.rerere.ai.ui.UIMessage.user(userContent.trim())
+                                messages.add(me.rerere.rikkahub.data.model.MessageNode.of(userMessage))
+                            }
+                            
+                            // Add AI response message if available
+                            if (!data.aiResponse.isNullOrBlank()) {
+                                val assistantMessage = me.rerere.ai.ui.UIMessage.assistant(data.aiResponse)
+                                messages.add(me.rerere.rikkahub.data.model.MessageNode.of(assistantMessage))
+                            }
+                            
+                            if (messages.isNotEmpty()) {
+                                // Use the assistant from text selection config if available
+                                val assistantId = data.selectionAssistantId?.takeIf { it.isNotBlank() }?.let { 
+                                    try { Uuid.parse(it) } catch (e: Exception) { null }
+                                } ?: settings.assistantId
+                                
+                                // Create the conversation with messages
+                                val conversation = me.rerere.rikkahub.data.model.Conversation.ofId(
+                                    id = conversationId,
+                                    assistantId = assistantId,
+                                    messages = messages
+                                )
+                                
+                                // Save to database
+                                chatService.saveConversation(conversationId, conversation)
+                                
+                                // Navigate to the conversation
+                                navBackStack.navigate(Screen.Chat(id = conversationId.toString()))
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        android.util.Log.d(TAG, "onNewIntent called")
+        android.util.Log.d(TAG, "Intent extras: conversationId=${intent.getStringExtra("conversationId")}, assistantId=${intent.getStringExtra("assistantId")}")
+        
         // Navigate to the chat screen if a conversation ID is provided
         intent.getStringExtra("conversationId")?.let { text ->
+            android.util.Log.d(TAG, "Navigating to conversation: $text")
             navStack?.navigate(Screen.Chat(text))
         }
-        // Handle assistant shortcut
+        
+        // Handle assistant shortcut - navigate directly instead of using state
         intent.getStringExtra("assistantId")?.let { assistantIdStr ->
-            pendingAssistantId = assistantIdStr
+            android.util.Log.d(TAG, "Handling assistant shortcut directly: $assistantIdStr")
+            lifecycleScope.launch {
+                try {
+                    val assistantId = Uuid.parse(assistantIdStr)
+                    android.util.Log.d(TAG, "Updating to assistant: $assistantId")
+                    // Update the selected assistant
+                    settingsStore.updateAssistant(assistantId)
+                    // Mark as recently used
+                    settingsStore.markAssistantUsed(assistantId)
+                    // Navigate to a new chat
+                    val newChatId = Uuid.random().toString()
+                    android.util.Log.d(TAG, "Navigating to new chat: $newChatId")
+                    navStack?.navigate(Screen.Chat(newChatId)) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                    android.util.Log.d(TAG, "Navigation complete")
+                } catch (e: Exception) {
+                    android.util.Log.e(TAG, "Error handling assistant shortcut", e)
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -282,7 +435,8 @@ class RouteActivity : ComponentActivity() {
                         ChatPage(
                             id = Uuid.parse(route.id),
                             text = route.text,
-                            files = route.files.map { it.toUri() }
+                            files = route.files.map { it.toUri() },
+                            searchQuery = route.searchQuery
                         )
                     }
 
@@ -307,7 +461,12 @@ class RouteActivity : ComponentActivity() {
                     composable<Screen.AssistantDetail> { backStackEntry ->
                         val route = backStackEntry.toRoute<Screen.AssistantDetail>()
                         CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                            AssistantDetailPage(route.id)
+                            AssistantDetailPage(
+                                id = route.id,
+                                startRoute = route.startRoute,
+                                initialMemoryTab = route.initialMemoryTab,
+                                scrollToMemoryId = route.scrollToMemoryId
+                            )
                         }
                     }
 
@@ -378,31 +537,30 @@ class RouteActivity : ComponentActivity() {
                         SettingPromptInjectionsPage()
                     }
 
-                    composable<Screen.SettingModes>(
-                        enterTransition = { fadeIn(animationSpec = tween(300)) },
-                        exitTransition = { fadeOut(animationSpec = tween(300)) },
-                        popEnterTransition = { fadeIn(animationSpec = tween(300)) },
-                        popExitTransition = { fadeOut(animationSpec = tween(300)) }
-                    ) {
-                        SettingModesPage()
+                    composable<Screen.SettingModes> { backStackEntry ->
+                        val route = backStackEntry.toRoute<Screen.SettingModes>()
+                        SettingModesPage(scrollToModeId = route.scrollToModeId)
                     }
 
-                    composable<Screen.SettingLorebooks>(
-                        enterTransition = { fadeIn(animationSpec = tween(300)) },
-                        exitTransition = { fadeOut(animationSpec = tween(300)) },
-                        popEnterTransition = { fadeIn(animationSpec = tween(300)) },
-                        popExitTransition = { fadeOut(animationSpec = tween(300)) }
-                    ) {
+                    composable<Screen.SettingLorebooks> {
                         SettingLorebooksPage()
                     }
 
                     composable<Screen.SettingLorebookDetail> { backStackEntry ->
                         val route = backStackEntry.toRoute<Screen.SettingLorebookDetail>()
-                        SettingLorebookDetailPage(id = route.id)
+                        SettingLorebookDetailPage(id = route.id, scrollToEntryId = route.scrollToEntryId)
                     }
 
                     composable<Screen.Developer> {
                         DeveloperPage()
+                    }
+
+                    composable<Screen.SettingAndroidIntegration> {
+                        SettingAndroidIntegrationPage()
+                    }
+
+                    composable<Screen.SettingUICustomization> {
+                        SettingUICustomizationPage()
                     }
 
                 }
@@ -416,7 +574,7 @@ class RouteActivity : ComponentActivity() {
 
 sealed interface Screen {
     @Serializable
-    data class Chat(val id: String, val text: String? = null, val files: List<String> = emptyList()) : Screen
+    data class Chat(val id: String, val text: String? = null, val files: List<String> = emptyList(), val searchQuery: String? = null) : Screen
 
     @Serializable
     data class ShareHandler(val text: String, val streamUri: String? = null) : Screen
@@ -426,7 +584,12 @@ sealed interface Screen {
     data object Assistant : Screen
 
     @Serializable
-    data class AssistantDetail(val id: String) : Screen
+    data class AssistantDetail(
+        val id: String,
+        val startRoute: String? = null,  // Navigate directly to a sub-route (e.g., "memory")
+        val initialMemoryTab: Int? = null,  // 0 = Core, 1 = Episodic
+        val scrollToMemoryId: Int? = null  // Memory ID to scroll to
+    ) : Screen
 
     @Serializable
     data object Menu : Screen
@@ -477,15 +640,21 @@ sealed interface Screen {
     data object SettingPromptInjections : Screen
 
     @Serializable
-    data object SettingModes : Screen
+    data class SettingModes(val scrollToModeId: String? = null) : Screen
 
     @Serializable
     data object SettingLorebooks : Screen
 
     @Serializable
-    data class SettingLorebookDetail(val id: String) : Screen
+    data class SettingLorebookDetail(val id: String, val scrollToEntryId: String? = null) : Screen
 
     @Serializable
     data object Developer : Screen
+
+    @Serializable
+    data object SettingAndroidIntegration : Screen
+
+    @Serializable
+    data object SettingUICustomization : Screen
 
 }
