@@ -26,22 +26,37 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # 直接固定为plus版本
       - name: Set flavor to plus
         id: flavor
         run: |
           echo "flavor=plus" >> "$GITHUB_OUTPUT"
           echo "Building for flavor: plus"
 
-      # 无需准备google-services.json和密钥文件
-      # 因为build.gradle.kts已支持跳过缺失的google-services.json
+      - name: Create dummy keystore
+        run: |
+          # 创建虚拟签名密钥（测试用）
+          keytool -genkeypair -v -keystore app/app.key -alias key0 \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=CI, OU=CI, O=CI, L=CI, S=CI, C=CI" \
+            -storepass android -keypass android
+          echo "Created dummy keystore"
+
+      - name: Create local.properties
+        run: |
+          # 创建签名配置
+          cat > local.properties <<EOF
+          storeFile=app.key
+          storePassword=android
+          keyAlias=key0
+          keyPassword=android
+          EOF
+          echo "Created local.properties"
 
       - name: Gradle Build Release
         run: |
           set -euo pipefail
           chmod +x gradlew
           
-          # 固定构建plus版本
           echo "Building release APK (assemblePlusRelease)..."
           ./gradlew ":app:assemblePlusRelease" --no-daemon --stacktrace
 
@@ -61,4 +76,3 @@ jobs:
             app/build/outputs/apk/plus/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
