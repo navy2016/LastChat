@@ -26,9 +26,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.core.spring
 import androidx.core.net.toUri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.VideoLibrary
@@ -58,6 +60,7 @@ import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -199,6 +202,7 @@ fun MinimalChatInput(
     
     var showPicker by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
+    var isFullScreen by remember { mutableStateOf(false) }
 
     val groupChatTemplateForMentions = remember(
         uiMode,
@@ -296,7 +300,15 @@ fun MinimalChatInput(
             ) {
                 ChatSuggestionsRow(
                     suggestions = chatSuggestions,
-                    onClickSuggestion = onClickSuggestion
+                    onClickSuggestion = onClickSuggestion,
+                    onLongPressSuggestion = { suggestion ->
+                        haptics.perform(HapticPattern.Pop)
+                        if (isFocused) {
+                            state.insertTextAtCursor(suggestion)
+                        } else {
+                            state.appendText(suggestion)
+                        }
+                    }
                 )
             }
             
@@ -338,6 +350,10 @@ fun MinimalChatInput(
                     Box(
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        val showFullscreenInputButton = settings.displaySetting.showFullscreenInputButton &&
+                            (isFocused || state.textContent.text.isNotEmpty())
+                        val endPadding = if (showFullscreenInputButton) 96.dp else 48.dp
+
                         // Text input
                             TextField(
                                 state = state.textContent,
@@ -361,7 +377,7 @@ fun MinimalChatInput(
                             ),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                                 start = 16.dp,
-                                end = 48.dp,  // Space for 40dp button + 4dp padding
+                                end = endPadding,  // Space for action buttons + padding
                                 top = 12.dp,  // (48dp height - 24dp text) / 2 = 12dp
                                 bottom = 12.dp
                             )
@@ -486,12 +502,49 @@ fun MinimalChatInput(
                             }
                         }
                         
-                        // Action button - bottom-right, 4dp padding ("4dp all around")
-                        Box(
+                        // Action buttons - bottom-right, 4dp padding ("4dp all around")
+                        Row(
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
-                                .padding(4.dp)
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            if (showFullscreenInputButton) {
+                                val fullscreenInteractionSource = remember { MutableInteractionSource() }
+                                val isFullscreenPressed by fullscreenInteractionSource.collectIsPressedAsState()
+                                val fullscreenScale by animateFloatAsState(
+                                    targetValue = if (isFullscreenPressed) 0.85f else 1f,
+                                    animationSpec = spring(dampingRatio = 0.6f, stiffness = 300f),
+                                    label = "fullscreen_input_scale",
+                                )
+
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .graphicsLayer {
+                                            scaleX = fullscreenScale
+                                            scaleY = fullscreenScale
+                                        }
+                                        .clip(CircleShape)
+                                        .clickable(
+                                            interactionSource = fullscreenInteractionSource,
+                                            indication = LocalIndication.current,
+                                        ) {
+                                            haptics.perform(HapticPattern.Pop)
+                                            isFullScreen = true
+                                        }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Fullscreen,
+                                        contentDescription = stringResource(R.string.chat_input_fullscreen),
+                                        modifier = Modifier.size(22.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
                             val currentAction = when {
                                 state.loading -> "loading"
                                 !state.isEmpty() -> "send"
@@ -578,6 +631,15 @@ fun MinimalChatInput(
             }  // Row ends
         }  // Column ends
     }  // Box ends
+
+    if (isFullScreen) {
+        FullScreenEditor(
+            state = state,
+            onSend = { sendMessage() },
+        ) {
+            isFullScreen = false
+        }
+    }
     
     // Bottom sheet picker with custom MinimalPickerContent
     // Optical roundness: sheet corners (40dp) = button corners (24dp) + padding (16dp)
@@ -1634,7 +1696,8 @@ private fun MediaFileInputRow(
 private fun ChatSuggestionsRow(
     modifier: Modifier = Modifier,
     suggestions: List<String>,
-    onClickSuggestion: (String) -> Unit
+    onClickSuggestion: (String) -> Unit,
+    onLongPressSuggestion: (String) -> Unit,
 ) {
     val scrollState = rememberScrollState()
     var pressedSuggestionIndex by remember { mutableStateOf<Int?>(null) }
@@ -1713,12 +1776,12 @@ private fun ChatSuggestionsRow(
                             scaleY = scale
                             this.alpha = alpha
                         }
-                        .clickable(
+                        .combinedClickable(
                             interactionSource = interactionSource,
-                            indication = null
-                        ) {
-                                selectedSuggestionIndex = index
-                        }
+                            indication = null,
+                            onClick = { selectedSuggestionIndex = index },
+                            onLongClick = { onLongPressSuggestion(suggestion) },
+                        )
                 ) {
                     Text(
                         text = suggestion,
