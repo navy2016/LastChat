@@ -1,0 +1,64 @@
+name: Android Release Build
+
+on:
+  push:
+    tags:
+      - "*zh*"
+      - "*plus*"
+      - "[0-9]*"
+
+permissions:
+  contents: write     
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # 直接固定为plus版本
+      - name: Set flavor to plus
+        id: flavor
+        run: |
+          echo "flavor=plus" >> "$GITHUB_OUTPUT"
+          echo "Building for flavor: plus"
+
+      # 无需准备google-services.json和密钥文件
+      # 因为build.gradle.kts已支持跳过缺失的google-services.json
+
+      - name: Gradle Build Release
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          
+          # 固定构建plus版本
+          echo "Building release APK (assemblePlusRelease)..."
+          ./gradlew ":app:assemblePlusRelease" --no-daemon --stacktrace
+
+      - name: Upload build output (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk-plus
+          path: app/build/outputs/apk/plus/release/*.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            app/build/outputs/apk/plus/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
