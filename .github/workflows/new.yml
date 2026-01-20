@@ -43,6 +43,7 @@ jobs:
           
           # 固定构建plus版本
           echo "Building release APK (assemblePlusRelease)..."
+          ./gradlew clean
           ./gradlew ":app:assemblePlusRelease" --no-daemon --stacktrace
 
       - name: Upload build output (artifact)
