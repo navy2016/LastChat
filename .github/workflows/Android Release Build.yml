@@ -24,25 +24,44 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # 🔥 直接创建占位文件，无需secret
-      - name: Create Placeholder google-services.json
+      # 🔥 增强版占位：包含所有 Firebase 服务空配置
+      - name: Create Safe google-services.json
         run: |
           mkdir -p app/src/plus
           cat > app/src/plus/google-services.json << 'EOF'
           {
             "project_info": {
-              "project_number": "123456789",
+              "project_number": "123456789012",
+              "firebase_url": "",
               "project_id": "lastchat-rikkafork-cocolal-plus",
               "storage_bucket": "lastchat-rikkafork-cocolal-plus.appspot.com"
             },
             "client": [{
               "client_info": {
-                "mobilesdk_app_id": "1:123456789:android:abcdef123456",
+                "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890abcdef",
                 "android_client_info": {
                   "package_name": "lastchat.rikkafork.cocolal.plus"
                 }
               },
-              "api_key": [{"current_key": "dummy-key-for-self-use-only"}]
+              "oauth_client": [],
+              "api_key": [{
+                "current_key": "dummy-key-for-self-use-only"
+              }],
+              "services": {
+                "appinvite_service": {
+                  "other_platform_oauth_client": []
+                },
+                "analytics_service": {
+                  "status": 2,
+                  "analytics_property": {
+                    "tracking_id": "UA-000000-0"
+                  }
+                },
+                "cloud_messaging_service": {
+                  "status": 2,
+                  "apns_config": []
+                }
+              }
             }]
           }
           EOF
@@ -59,7 +78,6 @@ jobs:
           path: app/build/outputs/apk/plus/debug/*.apk
           retention-days: 30
 
-      # 可选：Release时自动上传
       - name: Upload to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
