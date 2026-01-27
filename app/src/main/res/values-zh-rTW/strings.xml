@@ -1008,7 +1008,9 @@
   <string name="assistant_page_background_model">後台模型</string>
   <string name="assistant_page_background_model_desc">用於後台任務（如自動通知）的模型。</string>
   <string name="assistant_page_prefer_built_in_search">優先使用內置搜索</string>
-  <string name="assistant_page_prefer_built_in_search_desc">不支持時將回退到上方選擇的提供商。</string>
+  <string name="assistant_page_prefer_built_in_search_desc">支援時使用內置搜索，否則回退到上方勾選的提供商。</string>
+  <string name="assistant_page_multi_search_title">多線搜索</string>
+  <string name="assistant_page_multi_search_desc">勾選多個提供商將並發搜尋並合併結果（按 URL 去重）。</string>
 
   <string name="assistant_page_tool_results_group_title">歷史工具結果最佳化</string>
   <string name="assistant_page_tool_results_mode_title">歷史工具結果</string>
@@ -1206,6 +1208,8 @@
   <string name="assistant_page_local_tools_device_control_subtitle">通知、應用、鬧鐘、提醒</string>
   <string name="assistant_page_local_tools_workspace_files_title">工作區檔案</string>
   <string name="assistant_page_local_tools_workspace_files_desc">允許助手讀寫目前對話的工作區檔案。需要先授予工作區根目錄權限。</string>
+  <string name="assistant_page_local_tools_lorebooks_editor_title">世界書編輯</string>
+  <string name="assistant_page_local_tools_lorebooks_editor_desc">允許助手編輯已啟用的世界書條目（新增/修改/刪除）。工具變更會寫入歷史，可撤銷。</string>
   <string name="assistant_page_memory_settings_title">記憶設置</string>
   <string name="assistant_page_temperature_level_value_format">%1$s（%2$s）</string>
   <string name="assistant_page_mcp_servers_desc">啟用外部工具服務器</string>
@@ -1289,6 +1293,13 @@
   <string name="lorebooks_page_cover">封面圖片</string>
   <string name="lorebooks_page_cover_hint">點擊選擇圖片或表情</string>
   <string name="lorebook_edit">編輯世界書</string>
+  <string name="lorebook_history">歷史</string>
+  <string name="lorebook_history_title">世界書歷史</string>
+  <string name="lorebook_history_undo_last_tool_change">撤銷最近一次工具改動</string>
+  <string name="lorebook_history_empty">還沒有工具歷史</string>
+  <string name="lorebook_history_undone">已撤銷</string>
+  <string name="lorebook_history_undo_success">已撤銷</string>
+  <string name="lorebook_history_undo_failed">撤銷失敗</string>
   <string name="lorebook_detail_not_found">未找到世界書</string>
   <string name="lorebook_detail_no_entries">還沒有條目</string>
   <string name="lorebook_detail_add_entry_hint">添加條目，在觸發時注入提示內容</string>
@@ -1336,6 +1347,8 @@
   <!-- Display -->
   <string name="setting_display_page_show_context_stacks_title">顯示上下文堆疊</string>
   <string name="setting_display_page_show_context_stacks_desc">在消息工具列顯示上下文來源（模式、記憶、世界書）</string>
+  <string name="setting_display_page_mcp_tool_call_timeout_title">MCP工具調用逾時時間</string>
+  <string name="setting_display_page_mcp_tool_call_timeout_desc">單位：秒</string>
   <string name="setting_display_page_show_assistant_avatar_title">顯示助手頭像</string>
   <string name="setting_display_page_show_assistant_avatar_desc">在消息前顯示助手的頭像</string>
 

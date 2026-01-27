@@ -164,6 +164,8 @@
     <string name="assistant_page_local_tools_device_control_subtitle">Notifications, apps, alarms, reminders</string>
     <string name="assistant_page_local_tools_workspace_files_title">Workspace Files</string>
     <string name="assistant_page_local_tools_workspace_files_desc">Allow assistant to read/write files in the current conversation workspace. Requires workspace root permission.</string>
+    <string name="assistant_page_local_tools_lorebooks_editor_title">Lorebooks Editor</string>
+    <string name="assistant_page_local_tools_lorebooks_editor_desc">Allow assistant to create/update/delete entries in enabled lorebooks (undoable via history).</string>
     <string name="assistant_page_manage_memory">Manage Memory (%d)</string>
     <string name="assistant_page_manage_memory_title">Manage Memory</string>
     <string name="assistant_page_memory_pinned_badge">Pinned</string>
@@ -585,6 +587,8 @@
     <string name="setting_display_page_show_fullscreen_input_button_desc">Show the fullscreen input button when the input bar is expanded</string>
     <string name="setting_display_page_show_context_stacks_desc">Show context sources (modes, memories, lorebooks) in message toolbar</string>
     <string name="setting_display_page_show_context_stacks_title">Show Context Stacks</string>
+    <string name="setting_display_page_mcp_tool_call_timeout_title">MCP Tool Call Timeout</string>
+    <string name="setting_display_page_mcp_tool_call_timeout_desc">Unit: seconds</string>
     <string name="setting_display_page_show_updates_desc">Show app update notifications</string>
     <string name="setting_display_page_show_updates_title">Show Updates</string>
     <string name="setting_display_page_show_user_avatar_desc">Show user avatar in chat messages</string>
@@ -1074,7 +1078,9 @@
     <string name="assistant_page_background_model">Background Model</string>
     <string name="assistant_page_background_model_desc">Model used for background tasks like spontaneous notifications.</string>
     <string name="assistant_page_prefer_built_in_search">Prefer Built-in Search</string>
-    <string name="assistant_page_prefer_built_in_search_desc">Falls back to selected provider above if not supported.</string>
+    <string name="assistant_page_prefer_built_in_search_desc">Uses built-in search when supported, otherwise falls back to providers selected above.</string>
+    <string name="assistant_page_multi_search_title">Multi Search</string>
+    <string name="assistant_page_multi_search_desc">Check multiple providers to search in parallel (URL deduped).</string>
 
     <string name="assistant_page_tool_results_group_title">Historical Tool Result Optimization</string>
     <string name="assistant_page_tool_results_mode_title">Old tool results</string>
@@ -1359,6 +1365,13 @@
     <string name="lorebook_detail_no_entries">No entries yet</string>
     <string name="lorebook_detail_add_entry_hint">Add entries to inject prompts when triggered</string>
     <string name="lorebook_edit">Edit Lorebook</string>
+    <string name="lorebook_history">History</string>
+    <string name="lorebook_history_title">Lorebook History</string>
+    <string name="lorebook_history_undo_last_tool_change">Undo last tool change</string>
+    <string name="lorebook_history_empty">No tool history yet</string>
+    <string name="lorebook_history_undone">Undone</string>
+    <string name="lorebook_history_undo_success">Undone</string>
+    <string name="lorebook_history_undo_failed">Failed to undo</string>
     <string name="lorebook_entry_unnamed">Unnamed Entry</string>
     <string name="lorebook_entry_add">Add Entry</string>
     <string name="lorebook_entry_edit">Edit Entry</string>

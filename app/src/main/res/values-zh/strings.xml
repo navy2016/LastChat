@@ -498,6 +498,8 @@
   <string name="setting_display_page_show_fullscreen_input_button_desc">输入栏展开时显示全屏输入按钮</string>
   <string name="setting_display_page_show_context_stacks_desc">在消息工具栏中显示上下文来源（模式、记忆、世界书）</string>
   <string name="setting_display_page_show_context_stacks_title">显示上下文堆栈</string>
+  <string name="setting_display_page_mcp_tool_call_timeout_title">MCP工具调用超时时间</string>
+  <string name="setting_display_page_mcp_tool_call_timeout_desc">单位：秒</string>
   <string name="setting_display_page_show_updates_desc">是否显示应用更新通知</string>
   <string name="setting_display_page_show_updates_title">显示更新</string>
   <string name="setting_display_page_show_user_avatar_desc">是否在聊天消息中显示用户头像</string>
@@ -1010,7 +1012,9 @@
     <string name="assistant_page_background_model">后台模型</string>
     <string name="assistant_page_background_model_desc">用于后台任务（如自动通知）的模型。</string>
     <string name="assistant_page_prefer_built_in_search">优先使用内置搜索</string>
-    <string name="assistant_page_prefer_built_in_search_desc">不支持时将回退到上方选择的提供商。</string>
+    <string name="assistant_page_prefer_built_in_search_desc">支持时使用内置搜索，否则回退到上方勾选的提供商。</string>
+    <string name="assistant_page_multi_search_title">多线搜索</string>
+    <string name="assistant_page_multi_search_desc">勾选多个提供商将并发搜索并合并结果（按 URL 去重）。</string>
 
     <string name="assistant_page_tool_results_group_title">历史工具结果优化</string>
     <string name="assistant_page_tool_results_mode_title">历史工具结果</string>
@@ -1220,6 +1224,8 @@
   <string name="assistant_page_local_tools_device_control_subtitle">通知、应用、闹钟、提醒</string>
   <string name="assistant_page_local_tools_workspace_files_title">工作区文件</string>
   <string name="assistant_page_local_tools_workspace_files_desc">允许助手读写当前会话的工作区文件。需要先授予工作区根目录权限。</string>
+  <string name="assistant_page_local_tools_lorebooks_editor_title">世界书编辑</string>
+  <string name="assistant_page_local_tools_lorebooks_editor_desc">允许助手编辑已启用的世界书条目（新增/修改/删除）。工具变更会写入历史，可撤销。</string>
   <string name="assistant_page_memory_settings_title">记忆设置</string>
   <string name="assistant_page_temperature_level_value_format">%1$s（%2$s）</string>
   <string name="assistant_page_mcp_servers_desc">启用外部工具服务器</string>
@@ -1351,6 +1357,13 @@
     <string name="lorebooks_page_cover_hint">点击选择图片或表情</string>
 
     <string name="lorebook_edit">编辑世界书</string>
+    <string name="lorebook_history">历史</string>
+    <string name="lorebook_history_title">世界书历史</string>
+    <string name="lorebook_history_undo_last_tool_change">撤销最近一次工具改动</string>
+    <string name="lorebook_history_empty">还没有工具历史</string>
+    <string name="lorebook_history_undone">已撤销</string>
+    <string name="lorebook_history_undo_success">已撤销</string>
+    <string name="lorebook_history_undo_failed">撤销失败</string>
     <string name="lorebook_detail_not_found">未找到世界书</string>
     <string name="lorebook_detail_no_entries">还没有条目</string>
     <string name="lorebook_detail_add_entry_hint">添加条目，在触发时注入提示内容</string>
