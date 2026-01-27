@@ -1,0 +1,176 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      # 🔥 关键修复：创建正确的 google-services.json
+      - name: Create Safe google-services.json
+        run: |
+          # 创建 plus 风味目录
+          mkdir -p app/src/plus/google-services
+          
+          # 创建完整的 google-services.json（所有 Firebase 服务标记为禁用）
+          cat > app/src/plus/google-services/google-services.json << 'EOF'
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "firebase_url": "",
+              "project_id": "lastchat-rikkafork-cocolal-plus",
+              "storage_bucket": "lastchat-rikkafork-cocolal-plus.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890abcdef",
+                "android_client_info": {
+                  "package_name": "lastchat.rikkafork.cocolal.plus"
+                }
+              },
+              "oauth_client": [],
+              "api_key": [{
+                "current_key": "dummy-key-for-self-use-only"
+              }],
+              "services": {
+                "appinvite_service": {
+                  "other_platform_oauth_client": []
+                },
+                "analytics_service": {
+                  "status": 2
+                },
+                "cloud_messaging_service": {
+                  "status": 2
+                },
+                "appinvite_service_google_analytics_status": {
+                  "status": 2
+                }
+              }
+            }],
+            "configuration_version": "1"
+          }
+          EOF
+          
+          # 同时创建主目录的备用配置
+          mkdir -p app/src/main
+          cat > app/src/main/google-services.json << 'EOF'
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "firebase_url": "",
+              "project_id": "lastchat-rikkafork-cocolal",
+              "storage_bucket": "lastchat-rikkafork-cocolal.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890abcdef",
+                "android_client_info": {
+                  "package_name": "lastchat.rikkafork.cocolal"
+                }
+              },
+              "oauth_client": [],
+              "api_key": [{
+                "current_key": "dummy-key-for-self-use-only"
+              }],
+              "services": {
+                "appinvite_service": {
+                  "other_platform_oauth_client": []
+                },
+                "analytics_service": {
+                  "status": 2
+                },
+                "cloud_messaging_service": {
+                  "status": 2
+                },
+                "appinvite_service_google_analytics_status": {
+                  "status": 2
+                }
+              }
+            }],
+            "configuration_version": "1"
+          }
+          EOF
+
+      # 🔧 修复：确保 Gradle wrapper 有执行权限
+      - name: Setup Gradle Wrapper
+        run: |
+          chmod +x gradlew
+          if [ ! -f "gradle/wrapper/gradle-wrapper.properties" ]; then
+            gradle wrapper --gradle-version=8.9
+          fi
+
+      # 🔥 关键修复：使用调试模式构建以捕获更多日志
+      - name: Build Debug APK with Extra Logging
+        run: |
+          # 先尝试清理构建
+          ./gradlew clean --quiet || true
+          
+          # 构建并保留详细日志
+          ./gradlew assemblePlusDebug \
+            --no-daemon \
+            --stacktrace \
+            --info \
+            -PfirebaseCrashReportingEnabled=false \
+            -PfirebaseAnalyticsDisabled=true \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
+            
+      # 🔧 验证 APK 存在
+      - name: Verify APK Output
+        run: |
+          APK_PATH="app/build/outputs/apk/plus/debug/"
+          if [ -d "$APK_PATH" ]; then
+            echo "APK directory found. Contents:"
+            ls -lh "$APK_PATH" || true
+          else
+            echo "Warning: APK directory not found!"
+            echo "Checking for alternative locations..."
+            find app/build/outputs -name "*.apk" 2>/dev/null || echo "No APK files found"
+          fi
+
+      # 📤 上传 APK
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lastchat-plus-debug
+          path: app/build/outputs/apk/plus/debug/*.apk
+          retention-days: 30
+
+      # 🔥 调试：上传构建日志
+      - name: Upload Build Logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            app/build/outputs/**/*.log
+            build/**/*.log
+            gradle/**/*.log
+          retention-days: 7
+
+      # 🚀 发布 Release
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/plus/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
