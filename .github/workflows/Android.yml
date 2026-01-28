@@ -1,4 +1,4 @@
-name: Build Debug APK
+name: Build Debug APK - Stable Version
 
 on:
   push:
@@ -14,9 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      # 1. 检出代码
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. 设置JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -24,92 +26,103 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # 🔥 关键修复：创建正确的 google-services.json
-      - name: Create Safe google-services.json
+      # 3. 🔥 核心修复：创建完整的google-services.json
+      - name: Create Complete google-services.json
         run: |
-          # 创建 plus 风味目录
-          mkdir -p app/src/plus/google-services
+          # 创建plus风味的配置目录
+          mkdir -p app/src/plus
           
-          # 创建完整的 google-services.json（所有 Firebase 服务标记为禁用）
-          cat > app/src/plus/google-services/google-services.json << 'EOF'
+          # 创建完整但"安全"的Firebase配置（所有服务标记为禁用）
+          cat > app/src/plus/google-services.json << 'EOF'
           {
             "project_info": {
               "project_number": "123456789012",
-              "firebase_url": "",
-              "project_id": "lastchat-rikkafork-cocolal-plus",
-              "storage_bucket": "lastchat-rikkafork-cocolal-plus.appspot.com"
+              "firebase_url": "https://dummy-project.firebaseio.com",
+              "project_id": "dummy-project",
+              "storage_bucket": "dummy-project.appspot.com"
             },
             "client": [{
               "client_info": {
-                "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890abcdef",
+                "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
                 "android_client_info": {
                   "package_name": "lastchat.rikkafork.cocolal.plus"
                 }
               },
               "oauth_client": [],
               "api_key": [{
-                "current_key": "dummy-key-for-self-use-only"
+                "current_key": "AIzaSyDummyKeyForBuildOnly123456"
               }],
               "services": {
                 "appinvite_service": {
                   "other_platform_oauth_client": []
                 },
                 "analytics_service": {
-                  "status": 2
+                  "status": 2,
+                  "analytics_property": {
+                    "tracking_id": "UA-000000-0"
+                  }
                 },
                 "cloud_messaging_service": {
-                  "status": 2
+                  "status": 2,
+                  "apns_config": []
                 },
                 "appinvite_service_google_analytics_status": {
                   "status": 2
-                }
+                },
+                "google_app_id": "1:123456789012:android:abcdef1234567890",
+                "google_crash_reporting_api_key": "AIzaSyDummyKeyForBuildOnly123456"
               }
             }],
             "configuration_version": "1"
           }
           EOF
           
-          # 同时创建主目录的备用配置
-          mkdir -p app/src/main
+          # 同样创建main风味的配置
           cat > app/src/main/google-services.json << 'EOF'
           {
             "project_info": {
               "project_number": "123456789012",
-              "firebase_url": "",
-              "project_id": "lastchat-rikkafork-cocolal",
-              "storage_bucket": "lastchat-rikkafork-cocolal.appspot.com"
+              "firebase_url": "https://dummy-project.firebaseio.com",
+              "project_id": "dummy-project",
+              "storage_bucket": "dummy-project.appspot.com"
             },
             "client": [{
               "client_info": {
-                "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890abcdef",
+                "mobilesdk_app_id": "1:123456789012:android:abcdef1234567890",
                 "android_client_info": {
                   "package_name": "lastchat.rikkafork.cocolal"
                 }
               },
               "oauth_client": [],
               "api_key": [{
-                "current_key": "dummy-key-for-self-use-only"
+                "current_key": "AIzaSyDummyKeyForBuildOnly123456"
               }],
               "services": {
                 "appinvite_service": {
                   "other_platform_oauth_client": []
                 },
                 "analytics_service": {
-                  "status": 2
+                  "status": 2,
+                  "analytics_property": {
+                    "tracking_id": "UA-000000-0"
+                  }
                 },
                 "cloud_messaging_service": {
-                  "status": 2
+                  "status": 2,
+                  "apns_config": []
                 },
                 "appinvite_service_google_analytics_status": {
                   "status": 2
-                }
+                },
+                "google_app_id": "1:123456789012:android:abcdef1234567890",
+                "google_crash_reporting_api_key": "AIzaSyDummyKeyForBuildOnly123456"
               }
             }],
             "configuration_version": "1"
           }
           EOF
 
-      # 🔧 修复：确保 Gradle wrapper 有执行权限
+      # 4. 🔧 修复：确保Gradle wrapper可执行
       - name: Setup Gradle Wrapper
         run: |
           chmod +x gradlew
@@ -117,35 +130,48 @@ jobs:
             gradle wrapper --gradle-version=8.9
           fi
 
-      # 🔥 关键修复：使用调试模式构建以捕获更多日志
-      - name: Build Debug APK with Extra Logging
+      # 5. 🔥 关键修复：禁用R8代码混淆和资源压缩（用于调试）
+      - name: Build Debug APK (No Minification)
         run: |
-          # 先尝试清理构建
+          echo "=== Cleaning build ==="
           ./gradlew clean --quiet || true
           
-          # 构建并保留详细日志
+          echo "=== Building plusDebug variant ==="
           ./gradlew assemblePlusDebug \
             --no-daemon \
             --stacktrace \
-            --info \
-            -PfirebaseCrashReportingEnabled=false \
-            -PfirebaseAnalyticsDisabled=true \
-            -Dorg.gradle.jvmargs="-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
-            
-      # 🔧 验证 APK 存在
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:+HeapDumpOnOutOfMemoryError" \
+            -Pandroid.injected.build.config.abiFilters=arm64-v8a,x86_64 \
+            -PdisableR8=true \
+            -PminifyDebug=false \
+            -PshrinkDebugResources=false
+
+      # 6. 🔧 验证APK输出
       - name: Verify APK Output
         run: |
-          APK_PATH="app/build/outputs/apk/plus/debug/"
+          echo "=== Checking APK output ==="
+          APK_PATH="app/build/outputs/apk/plus/debug"
           if [ -d "$APK_PATH" ]; then
-            echo "APK directory found. Contents:"
+            echo "APK directory found:"
             ls -lh "$APK_PATH" || true
+            APK_FILE=$(find "$APK_PATH" -name "*.apk" | head -1)
+            if [ -n "$APK_FILE" ]; then
+              echo "=== APK Info ==="
+              unzip -l "$APK_FILE" | head -20
+              APK_SIZE=$(stat -c%s "$APK_FILE")
+              echo "APK Size: $(echo "scale=2; $APK_SIZE/1024/1024" | bc) MB"
+            fi
           else
-            echo "Warning: APK directory not found!"
-            echo "Checking for alternative locations..."
+            echo "ERROR: APK directory not found!"
+            echo "=== Looking for any APK files ==="
             find app/build/outputs -name "*.apk" 2>/dev/null || echo "No APK files found"
+            echo "=== Build directory contents ==="
+            find app/build -type f -name "*.dex" 2>/dev/null | head -5
+            echo "=== Exit with error ==="
+            exit 1
           fi
 
-      # 📤 上传 APK
+      # 7. 📤 上传APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -153,19 +179,20 @@ jobs:
           path: app/build/outputs/apk/plus/debug/*.apk
           retention-days: 30
 
-      # 🔥 调试：上传构建日志
-      - name: Upload Build Logs
+      # 8. 🔥 调试：上传详细日志（失败时）
+      - name: Upload Debug Info (if failed)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs
+          name: debug-info
           path: |
             app/build/outputs/**/*.log
             build/**/*.log
             gradle/**/*.log
+            app/build/reports/**
           retention-days: 7
 
-      # 🚀 发布 Release
+      # 9. 🚀 发布Release
       - name: Upload to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
@@ -173,4 +200,4 @@ jobs:
           files: app/build/outputs/apk/plus/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
