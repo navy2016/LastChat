@@ -70,6 +70,8 @@ import me.rerere.rikkahub.ui.pages.imggen.ImageGenPage
 import me.rerere.rikkahub.ui.pages.logs.RequestLogDetailPage
 import me.rerere.rikkahub.ui.pages.logs.RequestLogsOverviewPage
 import me.rerere.rikkahub.ui.pages.menu.MenuPage
+import me.rerere.rikkahub.ui.pages.storage.StorageCategoryPage
+import me.rerere.rikkahub.ui.pages.storage.StorageManagerPage
 import me.rerere.rikkahub.ui.pages.setting.SettingAboutPage
 import me.rerere.rikkahub.ui.pages.setting.SettingDisplayPage
 
@@ -91,6 +93,7 @@ import me.rerere.rikkahub.ui.pages.share.handler.ShareHandlerPage
 import me.rerere.rikkahub.ui.pages.translator.TranslatorPage
 import me.rerere.rikkahub.ui.pages.webview.WebViewPage
 import me.rerere.rikkahub.ui.pages.setting.SettingAndroidIntegrationPage
+import me.rerere.rikkahub.ui.pages.setting.SettingFontsPage
 import me.rerere.rikkahub.ui.theme.LocalDarkMode
 import me.rerere.rikkahub.ui.theme.RikkahubTheme
 import okhttp3.OkHttpClient
@@ -346,8 +349,9 @@ class RouteActivity : ComponentActivity() {
                     val prefs = this@RouteActivity.getSharedPreferences("backup_cleanup", MODE_PRIVATE)
                     val unsupportedBytes = prefs.getLong("unsupported_bytes", 0)
                     val issuesFixed = prefs.getInt("issues_fixed", 0)
+                    val skippedRows = prefs.getInt("db_skipped_rows", 0)
                     
-                    if (unsupportedBytes > 0 || issuesFixed > 0) {
+                    if (unsupportedBytes > 0 || issuesFixed > 0 || skippedRows > 0) {
                         // Clear the stored values
                         prefs.edit().clear().apply()
                         
@@ -359,8 +363,11 @@ class RouteActivity : ComponentActivity() {
                         if (issuesFixed > 0) {
                             parts.add("$issuesFixed invalid references")
                         }
+                        if (skippedRows > 0) {
+                            parts.add("$skippedRows corrupt items removed")
+                        }
                         
-                        val message = "Backup cleaned: ${parts.joinToString(", ")}"
+                        val message = "Import completed: ${parts.joinToString(", ")}"
                         toastState.show(message, type = me.rerere.rikkahub.ui.components.ui.ToastType.Info)
                     }
                 }
@@ -475,6 +482,15 @@ class RouteActivity : ComponentActivity() {
                         SettingPage()
                     }
 
+                    composable<Screen.StorageManager> {
+                        StorageManagerPage()
+                    }
+
+                    composable<Screen.StorageCategory> { backStackEntry ->
+                        val route = backStackEntry.toRoute<Screen.StorageCategory>()
+                        StorageCategoryPage(category = route.category)
+                    }
+
                     composable<Screen.Backup> {
                         BackupPage()
                     }
@@ -569,6 +585,10 @@ class RouteActivity : ComponentActivity() {
                         SettingAndroidIntegrationPage()
                     }
 
+                    composable<Screen.SettingFonts> {
+                        SettingFontsPage()
+                    }
+
                 }
                 // Toast host must be last so it renders on top of all content
                 AppToasterHost(state = toastState)
@@ -614,6 +634,12 @@ sealed interface Screen {
 
     @Serializable
     data object Setting : Screen
+
+    @Serializable
+    data object StorageManager : Screen
+
+    @Serializable
+    data class StorageCategory(val category: String) : Screen
 
     @Serializable
     data object Backup : Screen
@@ -680,5 +706,8 @@ sealed interface Screen {
 
     @Serializable
     data object SettingAndroidIntegration : Screen
+
+    @Serializable
+    data object SettingFonts : Screen
 
 }

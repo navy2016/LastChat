@@ -486,8 +486,8 @@
   <string name="setting_display_page_show_message_jumper_title">消息导航按钮</string>
   <string name="setting_display_page_message_jumper_position_title">消息导航按钮位置</string>
   <string name="setting_display_page_message_jumper_position_desc">将消息导航移到左侧</string>
-  <string name="setting_display_page_show_model_name_desc">是否在聊天消息中显示模型名称</string>
-  <string name="setting_display_page_show_model_name_title">显示模型名称</string>
+  <string name="setting_display_page_show_model_name_desc">在消息前显示助手名称和时间</string>
+  <string name="setting_display_page_show_model_name_title">显示助手名称</string>
   <string name="setting_display_page_show_token_usage_desc">显示token用量和消息数量</string>
   <string name="setting_display_page_show_token_usage_title">显示Token和上下文统计</string>
   <string name="setting_display_page_message_input_style_title">消息输入栏样式</string>
@@ -514,6 +514,43 @@
   <string name="setting_display_page_font_style_expressive">M3 Expressive (Rounded)</string>
   <string name="setting_display_page_font_style_normal">普通</string>
   <string name="setting_display_page_font_style_title">字体风格</string>
+  <string name="setting_display_page_fonts_title">字体</string>
+  <string name="setting_display_page_fonts_desc">自定义标题、正文和代码的字体</string>
+  <string name="setting_fonts_page_title">字体</string>
+  <string name="setting_fonts_page_reset_all_cd">重置所有字体</string>
+  <string name="setting_fonts_page_section_general">常规</string>
+  <string name="setting_fonts_page_section_preview">预览</string>
+  <string name="setting_fonts_page_unified_toggle_title">标题与正文使用同一字体</string>
+  <string name="setting_fonts_page_unified_toggle_desc">将标题和正文的字体设置联动</string>
+  <string name="setting_fonts_page_section_headers">标题</string>
+  <string name="setting_fonts_page_section_headers_and_content">标题与正文</string>
+  <string name="setting_fonts_page_headers_desc">标题、页眉和展示文本</string>
+  <string name="setting_fonts_page_headers_and_content_desc">除代码块外的所有文本</string>
+  <string name="setting_fonts_page_section_content">正文</string>
+  <string name="setting_fonts_page_content_desc">段落、消息等正文文本</string>
+  <string name="setting_fonts_page_section_code_blocks">代码块</string>
+  <string name="setting_fonts_page_code_blocks_desc">代码、行内代码和等宽文本</string>
+  <string name="setting_fonts_page_reset_all_dialog_title">重置所有字体？</string>
+  <string name="setting_fonts_page_reset_all_dialog_desc">这将把所有字体设置重置为默认值。自定义字体文件会保留，但将不再被应用。</string>
+  <string name="setting_fonts_page_font_source_label">字体来源</string>
+  <string name="setting_fonts_page_font_source_default">默认</string>
+  <string name="setting_fonts_page_font_source_google_sans_code">Google Sans Code</string>
+  <string name="setting_fonts_page_font_source_custom">自定义</string>
+  <string name="setting_fonts_page_custom_font">自定义字体</string>
+  <string name="setting_fonts_page_remove_custom_font_cd">移除</string>
+  <string name="setting_fonts_page_variable_font_axes">可变字体 · %1$d 个轴</string>
+  <string name="setting_fonts_page_axes_label">字体轴</string>
+  <string name="setting_fonts_page_axis_width">宽度</string>
+  <string name="setting_fonts_page_axis_roundness">圆润度</string>
+  <string name="setting_fonts_page_typography_label">排版</string>
+  <string name="setting_fonts_page_typography_size">大小</string>
+  <string name="setting_fonts_page_typography_letter_spacing">字间距</string>
+  <string name="setting_fonts_page_features_label">OpenType 特性</string>
+  <string name="setting_fonts_page_reset_font_dialog_title">重置%1$s字体？</string>
+  <string name="setting_fonts_page_reset_font_dialog_desc">这将把 %1$s 的字体设置重置为默认值。</string>
+  <string name="setting_fonts_page_preview_header">标题预览</string>
+  <string name="setting_fonts_page_preview_body">这是正文字体的预览，用于展示消息和其他内容区域的显示效果。</string>
+  <string name="setting_fonts_page_preview_code">fun main() {\n    println(&quot;Hello, World!&quot;)\n}</string>
   <string name="setting_display_page_rp_optimizations_desc">为角色扮演模式提供自定义文本样式</string>
   <string name="setting_display_page_rp_optimizations_title">RP 优化</string>
   <string name="setting_display_page_section_advanced">高级</string>
@@ -583,6 +620,79 @@
   <string name="setting_page_chat_settings">聊天设置</string>
   <string name="setting_page_chat_storage">聊天记录存储</string>
   <string name="setting_page_chat_storage_desc">%1$d 个文件，%2$.2f MB</string>
+
+  <string name="storage_manager_title">存储管理</string>
+  <string name="storage_manager_total">总计</string>
+  <string name="storage_manager_loading_placeholder">加载中…</string>
+  <string name="storage_manager_chart_hint">点按扇区高亮</string>
+
+  <string name="storage_category_images">图片</string>
+  <string name="storage_category_files">文件</string>
+  <string name="storage_category_chat_records">聊天记录</string>
+  <string name="storage_category_cache">缓存</string>
+  <string name="storage_category_history_files">历史文件</string>
+  <string name="storage_category_logs">日志</string>
+
+  <string name="storage_category_subtitle">%1$s · %2$d 项</string>
+  <string name="storage_category_logs_subtitle">%1$d 条请求日志</string>
+
+  <string name="storage_category_usage_title">占用情况</string>
+  <string name="storage_category_usage_value">%1$s · %2$d 项</string>
+  <string name="storage_logs_included_note">日志与聊天记录存放在同一数据库内</string>
+
+  <string name="storage_filter_all_assistants">全部</string>
+  <string name="storage_assistant_unnamed">未命名助手</string>
+  <string name="storage_select_assistant_hint">请选择助手</string>
+
+  <string name="storage_images_assistant_title">按助手清理图片</string>
+  <string name="storage_files_assistant_title">按助手清理文件</string>
+  <string name="storage_chat_records_assistant_title">按助手清理聊天记录</string>
+  <string name="storage_assistant_file_stats">%1$s · %2$d 个文件</string>
+  <string name="storage_chat_records_count">%1$d 个会话</string>
+  <string name="storage_chat_records_attachments_hint">附件：%1$s · %2$d 个文件</string>
+
+  <string name="storage_action_clear_images">清理图片</string>
+  <string name="storage_action_clear_files">清理文件</string>
+  <string name="storage_action_clear_records_only">仅清理聊天记录</string>
+  <string name="storage_action_clear_attachments_only">仅清理附件</string>
+  <string name="storage_action_clear_records_and_attachments">清理聊天记录+附件</string>
+  <string name="storage_action_clear_cache">清理缓存</string>
+  <string name="storage_action_scan">扫描</string>
+  <string name="storage_action_clear_orphans">清理</string>
+  <string name="storage_action_open_logs">查看日志</string>
+
+  <string name="storage_confirm_clear_images_title">清理图片？</string>
+  <string name="storage_confirm_clear_images_desc">仅删除该助手聊天中的图片文件（只删文件）。聊天记录会保留，历史图片链接可能失效。</string>
+  <string name="storage_confirm_clear_files_title">清理文件？</string>
+  <string name="storage_confirm_clear_files_desc">仅删除该助手聊天中的附件文件（只删文件）。聊天记录会保留，历史附件链接可能失效。</string>
+  <string name="storage_confirm_clear_records_title">清理聊天记录？</string>
+  <string name="storage_confirm_clear_records_desc">删除该助手的聊天记录；不删除文件。</string>
+  <string name="storage_confirm_clear_attachments_title">清理附件？</string>
+  <string name="storage_confirm_clear_attachments_desc">删除该助手聊天中的附件文件；聊天记录会保留，历史附件链接可能失效。</string>
+  <string name="storage_confirm_clear_records_and_attachments_title">清理聊天记录与附件？</string>
+  <string name="storage_confirm_clear_records_and_attachments_desc">删除该助手的聊天记录与附件文件。</string>
+
+  <string name="storage_cache_title">缓存</string>
+  <string name="storage_cache_desc">清理临时缓存文件（后续可能会重新生成）。</string>
+  <string name="storage_confirm_clear_cache_title">清理缓存？</string>
+  <string name="storage_confirm_clear_cache_desc">将删除缓存文件。</string>
+
+  <string name="storage_history_title">历史文件</string>
+  <string name="storage_history_desc">扫描当前聊天/设置未引用的遗留文件（含孤儿 Skill 包）。</string>
+  <string name="storage_history_scan_summary">发现：%1$s · %2$d 个文件</string>
+  <string name="storage_history_no_orphans">未发现历史文件</string>
+  <string name="storage_confirm_clear_history_title">清理历史文件？</string>
+  <string name="storage_confirm_clear_history_desc">将删除当前聊天/设置未引用的文件。建议先备份。</string>
+
+  <string name="storage_logs_title">日志</string>
+  <string name="storage_logs_desc">请求日志存放在聊天记录数据库中。</string>
+
+  <string name="storage_toast_images_cleared">已清理图片</string>
+  <string name="storage_toast_files_cleared">已清理文件</string>
+  <string name="storage_toast_chat_records_cleared">已清理聊天记录</string>
+  <string name="storage_toast_cache_cleared">已清理缓存</string>
+  <string name="storage_toast_history_cleared">已清理历史文件</string>
+  <string name="storage_toast_done">完成</string>
   <string name="setting_page_color_mode">颜色模式</string>
   <string name="setting_page_color_mode_dark">深色</string>
   <string name="setting_page_color_mode_light">浅色</string>
@@ -1238,6 +1348,8 @@
   <string name="setting_request_logs_enable_developer_mode_first">需要先开启开发者模式。</string>
   <string name="request_logs_empty">还没有请求日志</string>
   <string name="request_logs_filter_all">全部</string>
+  <string name="request_logs_export_empty">暂无可导出的日志</string>
+  <string name="request_logs_export_failed">导出失败：%1$s</string>
   <string name="request_log_status_ok">成功</string>
   <string name="request_log_status_error">错误</string>
   <string name="request_log_empty_details">请选择一条日志查看详情</string>

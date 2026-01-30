@@ -16,6 +16,8 @@
     <string name="request_log_status_error">Error</string>
     <string name="request_logs_empty">No request logs yet</string>
     <string name="request_logs_filter_all">All</string>
+    <string name="request_logs_export_empty">No logs to export</string>
+    <string name="request_logs_export_failed">Failed to export logs: %1$s</string>
     <string name="request_log_empty_details">Select a log to view details</string>
     <string name="request_log_not_found">Log not found</string>
     <string name="request_log_detail_title">Request Log</string>
@@ -575,8 +577,8 @@
     <string name="setting_display_page_show_message_jumper_title">Message Jumper</string>
     <string name="setting_display_page_message_jumper_position_title">Jumper Position</string>
     <string name="setting_display_page_message_jumper_position_desc">Move jumper to left side</string>
-    <string name="setting_display_page_show_model_name_desc">Show model name in chat messages</string>
-    <string name="setting_display_page_show_model_name_title">Show Model Name</string>
+    <string name="setting_display_page_show_model_name_desc">Show assistant name and time before messages</string>
+    <string name="setting_display_page_show_model_name_title">Show Assistant Name</string>
     <string name="setting_display_page_show_token_usage_desc">Show token statistics below AI responses</string>
     <string name="setting_display_page_show_token_usage_title">Show Token Statistics</string>
     <string name="setting_display_page_message_input_style_title">Message Input Style</string>
@@ -603,6 +605,43 @@
     <string name="setting_display_page_font_style_expressive">M3 Expressive (Rounded)</string>
     <string name="setting_display_page_font_style_normal">Normal</string>
     <string name="setting_display_page_font_style_title">Font Style</string>
+    <string name="setting_display_page_fonts_title">Fonts</string>
+    <string name="setting_display_page_fonts_desc">Customize fonts for headers, content, and code</string>
+    <string name="setting_fonts_page_title">Fonts</string>
+    <string name="setting_fonts_page_reset_all_cd">Reset all fonts</string>
+    <string name="setting_fonts_page_section_general">General</string>
+    <string name="setting_fonts_page_section_preview">Preview</string>
+    <string name="setting_fonts_page_unified_toggle_title">Use same font for headers and content</string>
+    <string name="setting_fonts_page_unified_toggle_desc">Link header and content font settings together</string>
+    <string name="setting_fonts_page_section_headers">Headers</string>
+    <string name="setting_fonts_page_section_headers_and_content">Headers &amp; Content</string>
+    <string name="setting_fonts_page_headers_desc">Titles, headings, and display text</string>
+    <string name="setting_fonts_page_headers_and_content_desc">All text except code blocks</string>
+    <string name="setting_fonts_page_section_content">Content</string>
+    <string name="setting_fonts_page_content_desc">Body text, paragraphs, and messages</string>
+    <string name="setting_fonts_page_section_code_blocks">Code Blocks</string>
+    <string name="setting_fonts_page_code_blocks_desc">Code, inline code, and monospace text</string>
+    <string name="setting_fonts_page_reset_all_dialog_title">Reset all fonts?</string>
+    <string name="setting_fonts_page_reset_all_dialog_desc">This will reset all font settings to their defaults. Custom fonts will be kept but no longer applied.</string>
+    <string name="setting_fonts_page_font_source_label">Font source</string>
+    <string name="setting_fonts_page_font_source_default">Default</string>
+    <string name="setting_fonts_page_font_source_google_sans_code">Google Sans Code</string>
+    <string name="setting_fonts_page_font_source_custom">Custom</string>
+    <string name="setting_fonts_page_custom_font">Custom font</string>
+    <string name="setting_fonts_page_remove_custom_font_cd">Remove</string>
+    <string name="setting_fonts_page_variable_font_axes">Variable font · %1$d axes</string>
+    <string name="setting_fonts_page_axes_label">Font axes</string>
+    <string name="setting_fonts_page_axis_width">Width</string>
+    <string name="setting_fonts_page_axis_roundness">Roundness</string>
+    <string name="setting_fonts_page_typography_label">Typography</string>
+    <string name="setting_fonts_page_typography_size">Size</string>
+    <string name="setting_fonts_page_typography_letter_spacing">Letter spacing</string>
+    <string name="setting_fonts_page_features_label">OpenType features</string>
+    <string name="setting_fonts_page_reset_font_dialog_title">Reset %1$s font?</string>
+    <string name="setting_fonts_page_reset_font_dialog_desc">This will reset the font settings for %1$s to defaults.</string>
+    <string name="setting_fonts_page_preview_header">Header Preview</string>
+    <string name="setting_fonts_page_preview_body">This is a preview of the content font. It shows how body text will appear in messages and other content areas.</string>
+    <string name="setting_fonts_page_preview_code">fun main() {\n    println(&quot;Hello, World!&quot;)\n}</string>
     <string name="setting_display_page_rp_optimizations_desc">Custom text styling for roleplay patterns</string>
     <string name="setting_display_page_rp_optimizations_title">RP Optimizations</string>
     <string name="setting_display_page_section_advanced">Advanced</string>
@@ -672,6 +711,79 @@
     <string name="setting_page_chat_settings">Chat Settings</string>
     <string name="setting_page_chat_storage">Chat Storage</string>
     <string name="setting_page_chat_storage_desc">%1$d files, %2$.2f MB</string>
+
+    <string name="storage_manager_title">Storage Manager</string>
+    <string name="storage_manager_total">Total</string>
+    <string name="storage_manager_loading_placeholder">Loading…</string>
+    <string name="storage_manager_chart_hint">Tap a slice to highlight</string>
+
+    <string name="storage_category_images">Images</string>
+    <string name="storage_category_files">Files</string>
+    <string name="storage_category_chat_records">Chat Records</string>
+    <string name="storage_category_cache">Cache</string>
+    <string name="storage_category_history_files">History Files</string>
+    <string name="storage_category_logs">Logs</string>
+
+    <string name="storage_category_subtitle">%1$s · %2$d items</string>
+    <string name="storage_category_logs_subtitle">%1$d request logs</string>
+
+    <string name="storage_category_usage_title">Usage</string>
+    <string name="storage_category_usage_value">%1$s · %2$d items</string>
+    <string name="storage_logs_included_note">Logs are stored in the same database as Chat Records.</string>
+
+    <string name="storage_filter_all_assistants">All</string>
+    <string name="storage_assistant_unnamed">Unnamed assistant</string>
+    <string name="storage_select_assistant_hint">Select an assistant to continue</string>
+
+    <string name="storage_images_assistant_title">Assistant images</string>
+    <string name="storage_files_assistant_title">Assistant files</string>
+    <string name="storage_chat_records_assistant_title">Assistant chat records</string>
+    <string name="storage_assistant_file_stats">%1$s · %2$d files</string>
+    <string name="storage_chat_records_count">%1$d conversations</string>
+    <string name="storage_chat_records_attachments_hint">Attachments: %1$s · %2$d files</string>
+
+    <string name="storage_action_clear_images">Clear images</string>
+    <string name="storage_action_clear_files">Clear files</string>
+    <string name="storage_action_clear_records_only">Clear records</string>
+    <string name="storage_action_clear_attachments_only">Clear attachments</string>
+    <string name="storage_action_clear_records_and_attachments">Clear all</string>
+    <string name="storage_action_clear_cache">Clear cache</string>
+    <string name="storage_action_scan">Scan</string>
+    <string name="storage_action_clear_orphans">Clear</string>
+    <string name="storage_action_open_logs">Open logs</string>
+
+    <string name="storage_confirm_clear_images_title">Clear images?</string>
+    <string name="storage_confirm_clear_images_desc">This deletes image files from this assistant’s chats (files only). Chat history will be kept, but links may break.</string>
+    <string name="storage_confirm_clear_files_title">Clear files?</string>
+    <string name="storage_confirm_clear_files_desc">This deletes attachment files from this assistant’s chats (files only). Chat history will be kept, but links may break.</string>
+    <string name="storage_confirm_clear_records_title">Clear chat records?</string>
+    <string name="storage_confirm_clear_records_desc">This deletes this assistant’s chat records. Files will be kept.</string>
+    <string name="storage_confirm_clear_attachments_title">Clear attachments?</string>
+    <string name="storage_confirm_clear_attachments_desc">This deletes attachment files from this assistant’s chats. Chat history will be kept, but links may break.</string>
+    <string name="storage_confirm_clear_records_and_attachments_title">Clear records &amp; attachments?</string>
+    <string name="storage_confirm_clear_records_and_attachments_desc">This deletes this assistant’s chat records and attachment files.</string>
+
+    <string name="storage_cache_title">Cache</string>
+    <string name="storage_cache_desc">Clear temporary cache files. The app may rebuild them later.</string>
+    <string name="storage_confirm_clear_cache_title">Clear cache?</string>
+    <string name="storage_confirm_clear_cache_desc">This will delete cache files.</string>
+
+    <string name="storage_history_title">History files</string>
+    <string name="storage_history_desc">Scan for leftover files not referenced by current chats/settings (including orphan skill packages).</string>
+    <string name="storage_history_scan_summary">Found: %1$s · %2$d files</string>
+    <string name="storage_history_no_orphans">No history files found</string>
+    <string name="storage_confirm_clear_history_title">Clear history files?</string>
+    <string name="storage_confirm_clear_history_desc">This will delete files that are not referenced by current chats/settings. Make sure you have backups.</string>
+
+    <string name="storage_logs_title">Logs</string>
+    <string name="storage_logs_desc">Request logs are stored in Chat Records database.</string>
+
+    <string name="storage_toast_images_cleared">Images cleared</string>
+    <string name="storage_toast_files_cleared">Files cleared</string>
+    <string name="storage_toast_chat_records_cleared">Chat records cleared</string>
+    <string name="storage_toast_cache_cleared">Cache cleared</string>
+    <string name="storage_toast_history_cleared">History files cleared</string>
+    <string name="storage_toast_done">Done</string>
     <string name="setting_page_color_mode">Color Mode</string>
     <string name="setting_page_color_mode_dark">Dark</string>
     <string name="setting_page_color_mode_light">Light</string>
