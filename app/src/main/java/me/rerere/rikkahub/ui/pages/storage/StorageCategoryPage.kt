@@ -45,6 +45,9 @@ fun StorageCategoryPage(
     val usageState by vm.categoryUsage.collectAsStateWithLifecycle()
     val attachmentStatsState by vm.assistantAttachmentStats.collectAsStateWithLifecycle()
     val conversationCountState by vm.assistantConversationCount.collectAsStateWithLifecycle()
+    val chatRecordMonthsState by vm.chatRecordMonths.collectAsStateWithLifecycle()
+    val assistantImagesState by vm.assistantImages.collectAsStateWithLifecycle()
+    val assistantFilesState by vm.assistantFiles.collectAsStateWithLifecycle()
     val orphanScanState by vm.orphanScan.collectAsStateWithLifecycle()
     val actionState by vm.action.collectAsStateWithLifecycle()
 
@@ -75,7 +78,7 @@ fun StorageCategoryPage(
                     IconButton(
                         onClick = {
                             haptics.perform(HapticPattern.Pop)
-                            vm.refreshUsage()
+                            vm.refreshUsage(force = true)
                         }
                     ) {
                         Icon(Icons.Rounded.Refresh, contentDescription = null)
@@ -96,14 +99,32 @@ fun StorageCategoryPage(
             },
             attachmentStatsState = attachmentStatsState,
             conversationCountState = conversationCountState,
-            onClearAssistantImages = { assistantId -> vm.clearAssistantImages(assistantId) },
+            assistantImagesState = assistantImagesState,
+            assistantFilesState = assistantFilesState,
+            chatRecordMonthsState = chatRecordMonthsState,
+            onDeleteImages = { assistantId, absolutePaths -> vm.deleteImages(assistantId, absolutePaths) },
+            onDeleteFiles = { assistantId, absolutePaths -> vm.deleteFiles(assistantId, absolutePaths) },
             onClearAssistantFiles = { assistantId -> vm.clearAssistantFiles(assistantId) },
-            onClearAssistantChats = { assistantId, mode -> vm.clearAssistantChats(assistantId, mode) },
+            onLoadChatRecordConversationsByYearMonth = { assistantId, yearMonth ->
+                vm.getChatRecordConversationsByYearMonth(
+                    assistantId = assistantId,
+                    yearMonth = yearMonth,
+                )
+            },
+            onClearChatRecordSelection = { assistantId, yearMonths, conversationIds ->
+                vm.clearChatRecordsSelection(
+                    assistantId = assistantId,
+                    yearMonths = yearMonths,
+                    conversationIds = conversationIds,
+                )
+            },
             orphanScanState = orphanScanState,
             onScanOrphans = { vm.scanOrphans() },
             onClearAllOrphans = { vm.clearAllOrphans() },
             onClearCache = { vm.clearCache() },
             onOpenLogs = { navController.navigate(Screen.RequestLogs) },
+            onLoadMoreImages = { vm.loadMoreImages() },
+            onLoadMoreFiles = { vm.loadMoreFiles() },
         )
     }
 }

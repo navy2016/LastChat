@@ -327,6 +327,13 @@
     <string name="chat_message_tool_call_skill">Calling skill %1$s</string>
     <string name="chat_message_tool_call_result">Result</string>
     <string name="chat_message_tool_call_title">Tool Call</string>
+    <string name="mcp_tool_approval_prompt">Allow calling %1$s?</string>
+    <string name="mcp_tool_approval_title">MCP tool approval</string>
+    <string name="mcp_tool_approval_subtitle">Tool: %1$s</string>
+    <string name="mcp_tool_approval_approve">Approve</string>
+    <string name="mcp_tool_approval_reject">Reject</string>
+    <string name="mcp_tool_approval_approved_calling">Approved, calling %1$s…</string>
+    <string name="mcp_tool_approval_rejected_result">User declined this call</string>
     <string name="chat_message_tool_create_memory">Created memory</string>
     <string name="chat_message_tool_delete_memory">Deleted memory</string>
     <string name="chat_message_tool_edit_memory">Updated memory</string>
@@ -494,7 +501,9 @@
     <string name="notification_channel_chat_completed">Chat Completed</string>
     <string name="notification_channel_chat_live_update">Chat Live Update</string>
     <string name="notification_chat_done_title">Message Generated</string>
+    <string name="notification_live_update_waiting">Waiting</string>
     <string name="notification_live_update_inference">Reasoning</string>
+    <string name="notification_live_update_tool_call">Using tools</string>
     <string name="notification_live_update_output">Generating</string>
     <string name="notification_live_update_done">Generation completed</string>
     <string name="notification_live_update_error">Generation failed</string>
@@ -589,6 +598,10 @@
     <string name="setting_display_page_show_fullscreen_input_button_desc">Show the fullscreen input button when the input bar is expanded</string>
     <string name="setting_display_page_show_context_stacks_desc">Show context sources (modes, memories, lorebooks) in message toolbar</string>
     <string name="setting_display_page_show_context_stacks_title">Show Context Stacks</string>
+    <string name="setting_display_page_embedding_retrieval_timeout_title">Embedding Retrieval Timeout</string>
+    <string name="setting_display_page_embedding_retrieval_timeout_desc">If timeout, skip this retrieval. Unit: seconds</string>
+    <string name="setting_display_page_use_last_turn_memory_title">Use Last Turn Memories</string>
+    <string name="setting_display_page_use_last_turn_memory_desc">When memory retrieval is skipped, reuse memories injected in the last turn</string>
     <string name="setting_display_page_mcp_tool_call_timeout_title">MCP Tool Call Timeout</string>
     <string name="setting_display_page_mcp_tool_call_timeout_desc">Unit: seconds</string>
     <string name="setting_display_page_show_updates_desc">Show app update notifications</string>
@@ -659,6 +672,7 @@
     <string name="setting_mcp_page_delete_header">Delete Header</string>
     <string name="setting_mcp_page_enable">Enable</string>
     <string name="setting_mcp_page_enable_desc">Enable this MCP server</string>
+    <string name="setting_mcp_page_tool_require_approval">Require approval</string>
     <string name="setting_mcp_page_header_name">Header Name</string>
     <string name="setting_mcp_page_header_name_placeholder">e.g. Authorization</string>
     <string name="setting_mcp_page_header_value">Header Value</string>
@@ -713,6 +727,8 @@
     <string name="setting_page_chat_storage_desc">%1$d files, %2$.2f MB</string>
 
     <string name="storage_manager_title">Storage Manager</string>
+    <string name="storage_manager_overview">Overview</string>
+    <string name="storage_manager_categories">Categories</string>
     <string name="storage_manager_total">Total</string>
     <string name="storage_manager_loading_placeholder">Loading…</string>
     <string name="storage_manager_chart_hint">Tap a slice to highlight</string>
@@ -734,19 +750,42 @@
     <string name="storage_filter_all_assistants">All</string>
     <string name="storage_assistant_unnamed">Unnamed assistant</string>
     <string name="storage_select_assistant_hint">Select an assistant to continue</string>
+    <string name="storage_all_assistants_hint">Showing all assistants</string>
 
     <string name="storage_images_assistant_title">Assistant images</string>
     <string name="storage_files_assistant_title">Assistant files</string>
-    <string name="storage_chat_records_assistant_title">Assistant chat records</string>
+    <string name="storage_chat_records_assistant_title">Chat records</string>
     <string name="storage_assistant_file_stats">%1$s · %2$d files</string>
     <string name="storage_chat_records_count">%1$d conversations</string>
     <string name="storage_chat_records_attachments_hint">Attachments: %1$s · %2$d files</string>
 
+    <string name="storage_images_preview_title">Image selection</string>
+    <string name="storage_images_preview_hint">Tap to preview · Long press to select</string>
+    <string name="storage_images_empty_hint">No images found for this assistant</string>
+    <string name="storage_images_empty_global_hint">No images found in chats</string>
+    <string name="storage_images_total_summary">All: %1$s · %2$d images</string>
+    <string name="storage_files_preview_title">File list</string>
+    <string name="storage_files_preview_hint">Tap to open · Long press to select</string>
+    <string name="storage_files_empty_hint">No files found for this assistant</string>
+    <string name="storage_files_empty_global_hint">No files found in chats</string>
+    <string name="storage_files_total_summary">All: %1$s · %2$d files</string>
+    <string name="storage_images_selected_summary">Selected: %1$s · %2$d images</string>
+    <string name="storage_files_selected_summary">Selected: %1$s · %2$d files</string>
+    <string name="storage_chat_records_preview_hint">Tap a month to select chats · Long press to select all</string>
+    <string name="storage_chat_records_empty_hint">No chat records found</string>
+    <string name="storage_chat_records_month_label">%1$d-%2$02d</string>
+    <string name="storage_chat_records_months_total_summary">All: %1$d months · %2$d conversations</string>
+    <string name="storage_chat_records_months_selected_summary">Selected: %1$d months · %2$d conversations</string>
+    <string name="storage_chat_records_sheet_selected_summary">Selected: %1$d/%2$d</string>
+
     <string name="storage_action_clear_images">Clear images</string>
     <string name="storage_action_clear_files">Clear files</string>
-    <string name="storage_action_clear_records_only">Clear records</string>
+    <string name="storage_action_clear_records_only">Clear</string>
     <string name="storage_action_clear_attachments_only">Clear attachments</string>
     <string name="storage_action_clear_records_and_attachments">Clear all</string>
+    <string name="storage_action_select_all">Select all</string>
+    <string name="storage_action_clear_selection">Clear selection</string>
+    <string name="storage_action_delete_selected">Delete selected</string>
     <string name="storage_action_clear_cache">Clear cache</string>
     <string name="storage_action_scan">Scan</string>
     <string name="storage_action_clear_orphans">Clear</string>
@@ -756,8 +795,14 @@
     <string name="storage_confirm_clear_images_desc">This deletes image files from this assistant’s chats (files only). Chat history will be kept, but links may break.</string>
     <string name="storage_confirm_clear_files_title">Clear files?</string>
     <string name="storage_confirm_clear_files_desc">This deletes attachment files from this assistant’s chats (files only). Chat history will be kept, but links may break.</string>
+    <string name="storage_confirm_delete_selected_images_title">Delete selected images?</string>
+    <string name="storage_confirm_delete_selected_images_desc">This deletes %1$d image files (%2$s) from this assistant’s chats (files only). Chat history will be kept, but links may break.</string>
+    <string name="storage_confirm_delete_selected_images_desc_global">This deletes %1$d image files (%2$s) from all assistants’ chats (files only). Chat history will be kept, but links may break.</string>
+    <string name="storage_confirm_delete_selected_files_title">Delete selected files?</string>
+    <string name="storage_confirm_delete_selected_files_desc">This deletes %1$d attachment files (%2$s) from this assistant’s chats (files only). Chat history will be kept, but links may break.</string>
+    <string name="storage_confirm_delete_selected_files_desc_global">This deletes %1$d attachment files (%2$s) from all assistants’ chats (files only). Chat history will be kept, but links may break.</string>
     <string name="storage_confirm_clear_records_title">Clear chat records?</string>
-    <string name="storage_confirm_clear_records_desc">This deletes this assistant’s chat records. Files will be kept.</string>
+    <string name="storage_confirm_clear_records_desc">This deletes chat records from the selected conversations. Files will be kept.</string>
     <string name="storage_confirm_clear_attachments_title">Clear attachments?</string>
     <string name="storage_confirm_clear_attachments_desc">This deletes attachment files from this assistant’s chats. Chat history will be kept, but links may break.</string>
     <string name="storage_confirm_clear_records_and_attachments_title">Clear records &amp; attachments?</string>
@@ -784,6 +829,7 @@
     <string name="storage_toast_cache_cleared">Cache cleared</string>
     <string name="storage_toast_history_cleared">History files cleared</string>
     <string name="storage_toast_done">Done</string>
+    <string name="storage_files_open_failed">Failed to open file: %1$s</string>
     <string name="setting_page_color_mode">Color Mode</string>
     <string name="setting_page_color_mode_dark">Dark</string>
     <string name="setting_page_color_mode_light">Light</string>

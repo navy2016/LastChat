@@ -237,6 +237,13 @@
   <string name="chat_message_tool_call_skill">調用技能 %1$s</string>
   <string name="chat_message_tool_call_result">調用結果</string>
   <string name="chat_message_tool_call_title">工具調用</string>
+  <string name="mcp_tool_approval_prompt">是否允許調用 %1$s</string>
+  <string name="mcp_tool_approval_title">MCP 工具審批</string>
+  <string name="mcp_tool_approval_subtitle">工具：%1$s</string>
+  <string name="mcp_tool_approval_approve">批准</string>
+  <string name="mcp_tool_approval_reject">拒絕</string>
+  <string name="mcp_tool_approval_approved_calling">已批准，正在調用 %1$s…</string>
+  <string name="mcp_tool_approval_rejected_result">用戶拒絕本次調用</string>
   <string name="chat_message_tool_create_memory">創建了記憶</string>
   <string name="chat_message_tool_delete_memory">刪除了記憶</string>
   <string name="chat_message_tool_edit_memory">更新了記憶</string>
@@ -482,6 +489,7 @@
   <string name="setting_mcp_page_delete_header">刪除請求頭</string>
   <string name="setting_mcp_page_enable">啟用</string>
   <string name="setting_mcp_page_enable_desc">是否啟用此MCP伺服器</string>
+  <string name="setting_mcp_page_tool_require_approval">需要審批</string>
   <string name="setting_mcp_page_header_name">請求頭名稱</string>
   <string name="setting_mcp_page_header_name_placeholder">例如：Authorization</string>
   <string name="setting_mcp_page_header_value">請求頭值</string>
@@ -536,6 +544,8 @@
   <string name="setting_page_chat_storage_desc">%1$d 個檔案，%2$.2f MB</string>
 
   <string name="storage_manager_title">儲存管理</string>
+  <string name="storage_manager_overview">總覽</string>
+  <string name="storage_manager_categories">分類</string>
   <string name="storage_manager_total">總計</string>
   <string name="storage_manager_loading_placeholder">載入中…</string>
   <string name="storage_manager_chart_hint">點按扇區以高亮</string>
@@ -557,19 +567,42 @@
   <string name="storage_filter_all_assistants">全部</string>
   <string name="storage_assistant_unnamed">未命名助手</string>
   <string name="storage_select_assistant_hint">請選擇助手</string>
+  <string name="storage_all_assistants_hint">目前顯示全部助手</string>
 
   <string name="storage_images_assistant_title">依助手清理圖片</string>
   <string name="storage_files_assistant_title">依助手清理檔案</string>
-  <string name="storage_chat_records_assistant_title">依助手清理聊天記錄</string>
+  <string name="storage_chat_records_assistant_title">聊天記錄</string>
   <string name="storage_assistant_file_stats">%1$s · %2$d 個檔案</string>
   <string name="storage_chat_records_count">%1$d 個會話</string>
   <string name="storage_chat_records_attachments_hint">附件：%1$s · %2$d 個檔案</string>
 
+  <string name="storage_images_preview_title">圖片選擇</string>
+  <string name="storage_images_preview_hint">點按預覽 · 長按選擇</string>
+  <string name="storage_images_empty_hint">未找到該助手的圖片</string>
+  <string name="storage_images_empty_global_hint">未找到聊天圖片</string>
+  <string name="storage_images_total_summary">全部：%1$s · %2$d 張</string>
+  <string name="storage_files_preview_title">檔案列表</string>
+  <string name="storage_files_preview_hint">點按開啟 · 長按選擇</string>
+  <string name="storage_files_empty_hint">未找到該助手的檔案</string>
+  <string name="storage_files_empty_global_hint">未找到聊天檔案</string>
+  <string name="storage_files_total_summary">總計：%1$s · %2$d 個檔案</string>
+  <string name="storage_images_selected_summary">已選擇：%1$s · %2$d 張</string>
+  <string name="storage_files_selected_summary">已選擇：%1$s · %2$d 個檔案</string>
+  <string name="storage_chat_records_preview_hint">點按選擇會話 · 長按全選整月</string>
+  <string name="storage_chat_records_empty_hint">暫無聊天記錄</string>
+  <string name="storage_chat_records_month_label">%1$d年%2$d月</string>
+  <string name="storage_chat_records_months_total_summary">總計：%1$d 個月 · %2$d 個會話</string>
+  <string name="storage_chat_records_months_selected_summary">已選：%1$d 個月 · %2$d 個會話</string>
+  <string name="storage_chat_records_sheet_selected_summary">已選：%1$d/%2$d</string>
+
   <string name="storage_action_clear_images">清理圖片</string>
   <string name="storage_action_clear_files">清理檔案</string>
-  <string name="storage_action_clear_records_only">僅清理聊天記錄</string>
+  <string name="storage_action_clear_records_only">清理</string>
   <string name="storage_action_clear_attachments_only">僅清理附件</string>
   <string name="storage_action_clear_records_and_attachments">清理聊天記錄+附件</string>
+  <string name="storage_action_select_all">全選</string>
+  <string name="storage_action_clear_selection">取消選擇</string>
+  <string name="storage_action_delete_selected">刪除所選</string>
   <string name="storage_action_clear_cache">清理快取</string>
   <string name="storage_action_scan">掃描</string>
   <string name="storage_action_clear_orphans">清理</string>
@@ -579,8 +612,14 @@
   <string name="storage_confirm_clear_images_desc">僅刪除該助手聊天中的圖片檔案（只刪檔案）。聊天記錄會保留，歷史圖片連結可能失效。</string>
   <string name="storage_confirm_clear_files_title">清理檔案？</string>
   <string name="storage_confirm_clear_files_desc">僅刪除該助手聊天中的附件檔案（只刪檔案）。聊天記錄會保留，歷史附件連結可能失效。</string>
+  <string name="storage_confirm_delete_selected_images_title">刪除所選圖片？</string>
+  <string name="storage_confirm_delete_selected_images_desc">僅刪除該助手聊天中的 %1$d 個圖片檔案（%2$s，只刪檔案）。聊天記錄會保留，歷史圖片連結可能失效。</string>
+  <string name="storage_confirm_delete_selected_images_desc_global">僅刪除所有助手聊天中的 %1$d 個圖片檔案（%2$s，只刪檔案）。聊天記錄會保留，歷史圖片連結可能失效。</string>
+  <string name="storage_confirm_delete_selected_files_title">刪除所選檔案？</string>
+  <string name="storage_confirm_delete_selected_files_desc">僅刪除該助手聊天中的 %1$d 個附件檔案（%2$s，只刪檔案）。聊天記錄會保留，歷史附件連結可能失效。</string>
+  <string name="storage_confirm_delete_selected_files_desc_global">僅刪除所有助手聊天中的 %1$d 個附件檔案（%2$s，只刪檔案）。聊天記錄會保留，歷史附件連結可能失效。</string>
   <string name="storage_confirm_clear_records_title">清理聊天記錄？</string>
-  <string name="storage_confirm_clear_records_desc">刪除該助手的聊天記錄；不刪除檔案。</string>
+  <string name="storage_confirm_clear_records_desc">刪除所選會話的聊天記錄；不刪除檔案。</string>
   <string name="storage_confirm_clear_attachments_title">清理附件？</string>
   <string name="storage_confirm_clear_attachments_desc">刪除該助手聊天中的附件檔案；聊天記錄會保留，歷史附件連結可能失效。</string>
   <string name="storage_confirm_clear_records_and_attachments_title">清理聊天記錄與附件？</string>
@@ -607,6 +646,7 @@
   <string name="storage_toast_cache_cleared">已清理快取</string>
   <string name="storage_toast_history_cleared">已清理歷史檔案</string>
   <string name="storage_toast_done">完成</string>
+  <string name="storage_files_open_failed">開啟檔案失敗：%1$s</string>
   <string name="setting_page_color_mode">顏色模式</string>
   <string name="setting_page_color_mode_dark">深色</string>
   <string name="setting_page_color_mode_light">淺色</string>
@@ -961,7 +1001,9 @@
   <string name="menu_page_total_chats">總聊天數</string>
   <string name="none">無</string>
   <string name="notification_channel_chat_live_update">聊天 Live Update</string>
+  <string name="notification_live_update_waiting">等待中</string>
   <string name="notification_live_update_inference">推理中</string>
+  <string name="notification_live_update_tool_call">工具調用中</string>
   <string name="notification_live_update_output">輸出中</string>
   <string name="notification_live_update_done">輸出完成</string>
   <string name="notification_live_update_error">生成異常</string>
@@ -1457,6 +1499,10 @@
   <!-- Display -->
   <string name="setting_display_page_show_context_stacks_title">顯示上下文堆疊</string>
   <string name="setting_display_page_show_context_stacks_desc">在消息工具列顯示上下文來源（模式、記憶、世界書）</string>
+  <string name="setting_display_page_embedding_retrieval_timeout_title">嵌入模型檢索逾時時間</string>
+  <string name="setting_display_page_embedding_retrieval_timeout_desc">逾時後將跳過該次檢索，單位：秒</string>
+  <string name="setting_display_page_use_last_turn_memory_title">使用上一輪記憶</string>
+  <string name="setting_display_page_use_last_turn_memory_desc">跳過記憶檢索後，使用上一輪注入的記憶</string>
   <string name="setting_display_page_mcp_tool_call_timeout_title">MCP工具調用逾時時間</string>
   <string name="setting_display_page_mcp_tool_call_timeout_desc">單位：秒</string>
   <string name="setting_display_page_show_assistant_avatar_title">顯示助手頭像</string>

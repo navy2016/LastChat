@@ -1,8 +1,6 @@
 package me.rerere.rikkahub.data.repository
 
 import android.content.Context
-import androidx.core.net.toFile
-import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -14,6 +12,8 @@ import me.rerere.rikkahub.data.db.dao.ConversationDAO
 import me.rerere.rikkahub.data.db.dao.GenMediaDAO
 import me.rerere.rikkahub.data.model.Avatar
 import java.io.File
+import java.time.YearMonth
+import java.time.ZoneId
 import kotlin.uuid.Uuid
 
 enum class StorageCategoryKey(val key: String) {
@@ -67,6 +67,26 @@ data class AssistantAttachmentStats(
     val fileBytes: Long,
 )
 
+data class AssistantImageEntry(
+    val absolutePath: String,
+    val bytes: Long,
+    val lastModified: Long,
+    val url: String,
+)
+
+data class AssistantFileEntry(
+    val absolutePath: String,
+    val bytes: Long,
+    val lastModified: Long,
+    val fileName: String,
+    val mime: String,
+)
+
+data class ChatRecordsMonthEntry(
+    val yearMonth: String,
+    val conversationCount: Int,
+)
+
 enum class AssistantChatCleanupMode {
     RECORDS_ONLY,
     FILES_ONLY,
@@ -81,10 +101,25 @@ class StorageManagerRepository(
     private val genMediaDAO: GenMediaDAO,
     private val aiRequestLogDao: AIRequestLogDao,
 ) {
-    suspend fun loadOverview(): StorageOverview = withContext(Dispatchers.IO) {
+    private val overviewCache = TimedSuspendCache<StorageOverview>(
+        maxAgeMs = 30 * 60_000L,
+    )
+
+    fun peekOverviewCache(): StorageOverview? = overviewCache.peek()?.value
+
+    fun invalidateOverviewCache() {
+        overviewCache.invalidate()
+    }
+
+    suspend fun loadOverview(forceRefresh: Boolean = false): StorageOverview {
+        return overviewCache.get(forceRefresh = forceRefresh) { computeOverview() }
+    }
+
+    private suspend fun computeOverview(): StorageOverview = withContext(Dispatchers.IO) {
         val settings = settingsStore.settingsFlow.value
 
         val requestLogCount = runCatching { aiRequestLogDao.countAll() }.getOrNull() ?: 0
+        val conversationCount = runCatching { conversationDAO.getConversationCount() }.getOrNull() ?: 0
 
         val dbUsage = countDatabaseUsage()
         val cacheUsage = countDirUsage(context.cacheDir)
@@ -136,8 +171,11 @@ class StorageManagerRepository(
             avatarsUsage.images.count +
             customIconsUsage.images.count
 
-        val filesBytes = uploadUsage.files.bytes + skillsUsage.files.bytes
-        val filesCount = uploadUsage.files.count + skillsUsage.files.count
+        // "Files" in Storage Manager is scoped to assistant chat attachments (upload/ referenced by conversations).
+        // Skills packages are managed elsewhere and should not be surfaced here.
+        val assistantFiles = getAllFileEntries()
+        val filesBytes = assistantFiles.sumOf { it.bytes }
+        val filesCount = assistantFiles.size
 
         val historyBytes = uploadUsage.history.bytes +
             imagesUsage.history.bytes +
@@ -153,7 +191,7 @@ class StorageManagerRepository(
         val categories = listOf(
             StorageCategoryUsage(StorageCategoryKey.IMAGES, imagesBytes, imagesCount),
             StorageCategoryUsage(StorageCategoryKey.FILES, filesBytes, filesCount),
-            StorageCategoryUsage(StorageCategoryKey.CHAT_RECORDS, dbUsage.bytes, dbUsage.count),
+            StorageCategoryUsage(StorageCategoryKey.CHAT_RECORDS, dbUsage.bytes, conversationCount),
             StorageCategoryUsage(StorageCategoryKey.CACHE, cacheUsage.bytes, cacheUsage.count),
             StorageCategoryUsage(StorageCategoryKey.HISTORY_FILES, historyBytes, historyCount),
             StorageCategoryUsage(StorageCategoryKey.LOGS, bytes = 0L, fileCount = requestLogCount),
@@ -181,10 +219,111 @@ class StorageManagerRepository(
 
     suspend fun getChatRecordsUsage(): StorageCategoryUsage = withContext(Dispatchers.IO) {
         val usage = countDatabaseUsage()
+        val conversationCount = runCatching { conversationDAO.getConversationCount() }.getOrNull() ?: 0
         StorageCategoryUsage(
             category = StorageCategoryKey.CHAT_RECORDS,
             bytes = usage.bytes,
-            fileCount = usage.count,
+            fileCount = conversationCount,
+        )
+    }
+
+    suspend fun getChatRecordsMonthEntries(assistantId: Uuid?): List<ChatRecordsMonthEntry> = withContext(Dispatchers.IO) {
+        val rows = if (assistantId == null) {
+            conversationDAO.getConversationMonthCounts()
+        } else {
+            conversationDAO.getConversationMonthCountsOfAssistant(assistantId.toString())
+        }
+
+        rows.map { ChatRecordsMonthEntry(yearMonth = it.yearMonth, conversationCount = it.count) }
+    }
+
+    suspend fun getChatRecordConversationsByYearMonth(
+        assistantId: Uuid?,
+        yearMonth: String,
+    ): List<LightConversationEntity> = withContext(Dispatchers.IO) {
+        val ym = runCatching { YearMonth.parse(yearMonth) }.getOrNull() ?: return@withContext emptyList()
+        val zoneId = ZoneId.systemDefault()
+        val startMs = ym.atDay(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val endMs = ym.plusMonths(1).atDay(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+
+        if (assistantId == null) {
+            conversationDAO.getLightConversationsByUpdateAtRange(startMs = startMs, endMs = endMs)
+        } else {
+            conversationDAO.getLightConversationsOfAssistantByUpdateAtRange(
+                assistantId = assistantId.toString(),
+                startMs = startMs,
+                endMs = endMs,
+            )
+        }
+    }
+
+    suspend fun clearChatRecordsByYearMonths(
+        assistantId: Uuid?,
+        yearMonths: Set<String>,
+    ): DeleteResult = withContext(Dispatchers.IO) {
+        val zoneId = ZoneId.systemDefault()
+        val ids = LinkedHashSet<String>(yearMonths.size * 8)
+
+        yearMonths.forEach { yearMonth ->
+            val ym = runCatching { YearMonth.parse(yearMonth) }.getOrNull() ?: return@forEach
+            val startMs = ym.atDay(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val endMs = ym.plusMonths(1).atDay(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+
+            val monthIds = if (assistantId == null) {
+                conversationDAO.getConversationIdsByUpdateAtRange(startMs = startMs, endMs = endMs)
+            } else {
+                conversationDAO.getConversationIdsOfAssistantByUpdateAtRange(
+                    assistantId = assistantId.toString(),
+                    startMs = startMs,
+                    endMs = endMs,
+                )
+            }
+            ids.addAll(monthIds)
+        }
+
+        var deletedCount = 0
+        var failedCount = 0
+        ids.forEach { conversationId ->
+            val ok = runCatching { conversationRepository.deleteConversationById(conversationId, deleteFiles = false) }
+                .isSuccess
+            if (ok) deletedCount += 1 else failedCount += 1
+        }
+
+        invalidateOverviewCache()
+        DeleteResult(
+            deletedCount = deletedCount,
+            failedCount = failedCount,
+            deletedBytes = 0L,
+        )
+    }
+
+    suspend fun clearChatRecordsByConversationIds(
+        conversationIds: Set<String>,
+    ): DeleteResult = withContext(Dispatchers.IO) {
+        if (conversationIds.isEmpty()) return@withContext DeleteResult(0, 0, 0L)
+
+        var deletedCount = 0
+        var failedCount = 0
+        conversationIds.forEach { conversationId ->
+            val ok = runCatching { conversationRepository.deleteConversationById(conversationId, deleteFiles = false) }
+                .isSuccess
+            if (ok) deletedCount += 1 else failedCount += 1
+        }
+
+        invalidateOverviewCache()
+        DeleteResult(
+            deletedCount = deletedCount,
+            failedCount = failedCount,
+            deletedBytes = 0L,
+        )
+    }
+
+    suspend fun getLogsUsage(): StorageCategoryUsage = withContext(Dispatchers.IO) {
+        val requestLogCount = runCatching { aiRequestLogDao.countAll() }.getOrNull() ?: 0
+        StorageCategoryUsage(
+            category = StorageCategoryKey.LOGS,
+            bytes = 0L,
+            fileCount = requestLogCount,
         )
     }
 
@@ -198,10 +337,10 @@ class StorageManagerRepository(
                 node.messages.forEach { message ->
                     message.parts.forEach { part ->
                         when (part) {
-                            is UIMessagePart.Image -> part.url.takeIf { it.startsWith("file://") }?.let(imageUrls::add)
-                            is UIMessagePart.Document -> part.url.takeIf { it.startsWith("file://") }?.let(fileUrls::add)
-                            is UIMessagePart.Video -> part.url.takeIf { it.startsWith("file://") }?.let(fileUrls::add)
-                            is UIMessagePart.Audio -> part.url.takeIf { it.startsWith("file://") }?.let(fileUrls::add)
+                            is UIMessagePart.Image -> imageUrls += part.url
+                            is UIMessagePart.Document -> fileUrls += part.url
+                            is UIMessagePart.Video -> fileUrls += part.url
+                            is UIMessagePart.Audio -> fileUrls += part.url
                             else -> Unit
                         }
                     }
@@ -209,22 +348,24 @@ class StorageManagerRepository(
             }
         }
 
+        val uploadDir = File(context.filesDir, "upload")
+
         val images = imageUrls
             .asSequence()
-            .mapNotNull(::toLocalFileOrNull)
-            .distinctBy { it.absolutePath }
+            .mapNotNull { StorageScanUtils.toExistingLocalFileOrNull(it, context.filesDir) }
+            .distinctBy { StorageScanUtils.normalizePath(it) }
             .filter { file ->
                 // Safety: only delete chat attachments in upload/, avoid touching avatars/images dirs.
-                StorageScanUtils.isInChildOf(file, File(context.filesDir, "upload"))
+                StorageScanUtils.isInChildOf(file, uploadDir)
             }
             .toList()
 
         val files = fileUrls
             .asSequence()
-            .mapNotNull(::toLocalFileOrNull)
-            .distinctBy { it.absolutePath }
+            .mapNotNull { StorageScanUtils.toExistingLocalFileOrNull(it, context.filesDir) }
+            .distinctBy { StorageScanUtils.normalizePath(it) }
             .filter { file ->
-                StorageScanUtils.isInChildOf(file, File(context.filesDir, "upload"))
+                StorageScanUtils.isInChildOf(file, uploadDir)
             }
             .toList()
 
@@ -250,10 +391,10 @@ class StorageManagerRepository(
                 node.messages.forEach { message ->
                     message.parts.forEach { part ->
                         when (part) {
-                            is UIMessagePart.Image -> if (clearImages) part.url.takeIf { it.startsWith("file://") }?.let(imageUrls::add)
-                            is UIMessagePart.Document -> if (clearFiles) part.url.takeIf { it.startsWith("file://") }?.let(fileUrls::add)
-                            is UIMessagePart.Video -> if (clearFiles) part.url.takeIf { it.startsWith("file://") }?.let(fileUrls::add)
-                            is UIMessagePart.Audio -> if (clearFiles) part.url.takeIf { it.startsWith("file://") }?.let(fileUrls::add)
+                            is UIMessagePart.Image -> if (clearImages) imageUrls += part.url
+                            is UIMessagePart.Document -> if (clearFiles) fileUrls += part.url
+                            is UIMessagePart.Video -> if (clearFiles) fileUrls += part.url
+                            is UIMessagePart.Audio -> if (clearFiles) fileUrls += part.url
                             else -> Unit
                         }
                     }
@@ -261,23 +402,26 @@ class StorageManagerRepository(
             }
         }
 
+        val uploadDir = File(context.filesDir, "upload")
         val targetFiles = (imageUrls + fileUrls)
             .asSequence()
-            .mapNotNull(::toLocalFileOrNull)
-            .distinctBy { it.absolutePath }
+            .mapNotNull { StorageScanUtils.toExistingLocalFileOrNull(it, context.filesDir) }
+            .distinctBy { StorageScanUtils.normalizePath(it) }
             .filter { file ->
-                StorageScanUtils.isInChildOf(file, File(context.filesDir, "upload"))
+                StorageScanUtils.isInChildOf(file, uploadDir)
             }
             .toList()
 
-        deleteFiles(targetFiles)
+        val result = deleteFiles(targetFiles)
+        invalidateOverviewCache()
+        result
     }
 
     suspend fun clearAssistantChats(
         assistantId: Uuid,
         mode: AssistantChatCleanupMode,
     ): DeleteResult = withContext(Dispatchers.IO) {
-        when (mode) {
+        val result = when (mode) {
             AssistantChatCleanupMode.RECORDS_ONLY -> {
                 conversationRepository.deleteConversationOfAssistant(assistantId, deleteFiles = false)
                 DeleteResult(deletedCount = 0, failedCount = 0, deletedBytes = 0L)
@@ -296,12 +440,300 @@ class StorageManagerRepository(
                 DeleteResult(deletedCount = 0, failedCount = 0, deletedBytes = 0L)
             }
         }
+        invalidateOverviewCache()
+        result
     }
 
     suspend fun getAssistantConversationCount(assistantId: Uuid): Int = withContext(Dispatchers.IO) {
         runCatching { conversationDAO.getConversationCountOfAssistant(assistantId.toString()) }
             .getOrNull()
             ?: 0
+    }
+
+    suspend fun getAssistantImageEntries(assistantId: Uuid): List<AssistantImageEntry> = withContext(Dispatchers.IO) {
+        val conversations = conversationRepository.getConversationsOfAssistant(assistantId).first()
+        val imageUrls = LinkedHashSet<String>()
+
+        conversations.forEach { conversation ->
+            conversation.messageNodes.forEach { node ->
+                node.messages.forEach { message ->
+                    message.parts.forEach { part ->
+                        when (part) {
+                            is UIMessagePart.Image -> imageUrls += part.url
+                            is UIMessagePart.Document -> if (part.mime.startsWith("image/")) imageUrls += part.url
+                            else -> Unit
+                        }
+                    }
+                }
+            }
+        }
+
+        val uploadDir = File(context.filesDir, "upload")
+        imageUrls
+            .asSequence()
+            .mapNotNull { StorageScanUtils.toExistingLocalFileOrNull(it, context.filesDir) }
+            .distinctBy { StorageScanUtils.normalizePath(it) }
+            .filter { file ->
+                StorageScanUtils.isInChildOf(file, uploadDir)
+            }
+            .map { file ->
+                val path = StorageScanUtils.normalizePath(file)
+                AssistantImageEntry(
+                    absolutePath = path,
+                    bytes = file.lengthSafe(),
+                    lastModified = runCatching { file.lastModified() }.getOrNull() ?: 0L,
+                    url = "file://$path",
+                )
+            }
+            .sortedByDescending { it.lastModified }
+            .toList()
+    }
+
+    suspend fun getAllImageEntries(): List<AssistantImageEntry> = withContext(Dispatchers.IO) {
+        val conversations = conversationRepository.getAllConversations().first()
+        val imageUrls = LinkedHashSet<String>()
+
+        conversations.forEach { conversation ->
+            conversation.messageNodes.forEach { node ->
+                node.messages.forEach { message ->
+                    message.parts.forEach { part ->
+                        when (part) {
+                            is UIMessagePart.Image -> imageUrls += part.url
+                            is UIMessagePart.Document -> if (part.mime.startsWith("image/")) imageUrls += part.url
+                            else -> Unit
+                        }
+                    }
+                }
+            }
+        }
+
+        val uploadDir = File(context.filesDir, "upload")
+        imageUrls
+            .asSequence()
+            .mapNotNull { StorageScanUtils.toExistingLocalFileOrNull(it, context.filesDir) }
+            .distinctBy { StorageScanUtils.normalizePath(it) }
+            .filter { file ->
+                StorageScanUtils.isInChildOf(file, uploadDir)
+            }
+            .map { file ->
+                val path = StorageScanUtils.normalizePath(file)
+                AssistantImageEntry(
+                    absolutePath = path,
+                    bytes = file.lengthSafe(),
+                    lastModified = runCatching { file.lastModified() }.getOrNull() ?: 0L,
+                    url = "file://$path",
+                )
+            }
+            .sortedByDescending { it.lastModified }
+            .toList()
+    }
+
+    suspend fun getAssistantFileEntries(assistantId: Uuid): List<AssistantFileEntry> = withContext(Dispatchers.IO) {
+        data class Candidate(
+            val url: String,
+            val fileName: String,
+            val mime: String,
+        )
+
+        val conversations = conversationRepository.getConversationsOfAssistant(assistantId).first()
+        val candidates = ArrayList<Candidate>(64)
+
+        conversations.forEach { conversation ->
+            conversation.messageNodes.forEach { node ->
+                node.messages.forEach { message ->
+                    message.parts.forEach { part ->
+                        when (part) {
+                            is UIMessagePart.Document -> {
+                                if (!part.mime.startsWith("image/")) {
+                                    candidates += Candidate(
+                                        url = part.url,
+                                        fileName = part.fileName,
+                                        mime = part.mime,
+                                    )
+                                }
+                            }
+
+                            is UIMessagePart.Video -> candidates += Candidate(
+                                url = part.url,
+                                fileName = "",
+                                mime = "video/*",
+                            )
+
+                            is UIMessagePart.Audio -> candidates += Candidate(
+                                url = part.url,
+                                fileName = "",
+                                mime = "audio/*",
+                            )
+
+                            else -> Unit
+                        }
+                    }
+                }
+            }
+        }
+
+        val uploadDir = File(context.filesDir, "upload")
+        val byPath = LinkedHashMap<String, AssistantFileEntry>()
+
+        candidates.forEach { candidate ->
+            val file = StorageScanUtils.toExistingLocalFileOrNull(candidate.url, context.filesDir) ?: return@forEach
+            if (!StorageScanUtils.isInChildOf(file, uploadDir)) return@forEach
+
+            val normalizedPath = StorageScanUtils.normalizePath(file)
+            val bytes = file.lengthSafe()
+            val lastModified = runCatching { file.lastModified() }.getOrNull() ?: 0L
+
+            val fallbackName = File(normalizedPath).name
+            val desiredName = candidate.fileName.trim().ifBlank { fallbackName }
+            val desiredMime = candidate.mime.trim()
+
+            val existing = byPath[normalizedPath]
+            val merged = if (existing == null) {
+                AssistantFileEntry(
+                    absolutePath = normalizedPath,
+                    bytes = bytes,
+                    lastModified = lastModified,
+                    fileName = desiredName,
+                    mime = desiredMime,
+                )
+            } else {
+                val existingFallbackName = File(existing.absolutePath).name
+                val mergedName = when {
+                    existing.fileName.isBlank() -> desiredName
+                    desiredName.isBlank() -> existing.fileName
+                    existing.fileName == existingFallbackName && desiredName != existingFallbackName -> desiredName
+                    else -> existing.fileName
+                }
+                val mergedMime = if (existing.mime.isBlank()) desiredMime else existing.mime
+                existing.copy(
+                    bytes = bytes,
+                    lastModified = maxOf(existing.lastModified, lastModified),
+                    fileName = mergedName,
+                    mime = mergedMime,
+                )
+            }
+            byPath[normalizedPath] = merged
+        }
+
+        byPath.values
+            .sortedByDescending { it.lastModified }
+    }
+
+    suspend fun getAllFileEntries(): List<AssistantFileEntry> = withContext(Dispatchers.IO) {
+        data class Candidate(
+            val url: String,
+            val fileName: String,
+            val mime: String,
+        )
+
+        val conversations = conversationRepository.getAllConversations().first()
+        val candidates = ArrayList<Candidate>(128)
+
+        conversations.forEach { conversation ->
+            conversation.messageNodes.forEach { node ->
+                node.messages.forEach { message ->
+                    message.parts.forEach { part ->
+                        when (part) {
+                            is UIMessagePart.Document -> {
+                                if (!part.mime.startsWith("image/")) {
+                                    candidates += Candidate(
+                                        url = part.url,
+                                        fileName = part.fileName,
+                                        mime = part.mime,
+                                    )
+                                }
+                            }
+
+                            is UIMessagePart.Video -> candidates += Candidate(
+                                url = part.url,
+                                fileName = "",
+                                mime = "video/*",
+                            )
+
+                            is UIMessagePart.Audio -> candidates += Candidate(
+                                url = part.url,
+                                fileName = "",
+                                mime = "audio/*",
+                            )
+
+                            else -> Unit
+                        }
+                    }
+                }
+            }
+        }
+
+        val uploadDir = File(context.filesDir, "upload")
+        val byPath = LinkedHashMap<String, AssistantFileEntry>()
+
+        candidates.forEach { candidate ->
+            val file = StorageScanUtils.toExistingLocalFileOrNull(candidate.url, context.filesDir) ?: return@forEach
+            if (!StorageScanUtils.isInChildOf(file, uploadDir)) return@forEach
+
+            val normalizedPath = StorageScanUtils.normalizePath(file)
+            val bytes = file.lengthSafe()
+            val lastModified = runCatching { file.lastModified() }.getOrNull() ?: 0L
+
+            val fallbackName = File(normalizedPath).name
+            val desiredName = candidate.fileName.trim().ifBlank { fallbackName }
+            val desiredMime = candidate.mime.trim()
+
+            val existing = byPath[normalizedPath]
+            val merged = if (existing == null) {
+                AssistantFileEntry(
+                    absolutePath = normalizedPath,
+                    bytes = bytes,
+                    lastModified = lastModified,
+                    fileName = desiredName,
+                    mime = desiredMime,
+                )
+            } else {
+                val existingFallbackName = File(existing.absolutePath).name
+                val mergedName = when {
+                    existing.fileName.isBlank() -> desiredName
+                    desiredName.isBlank() -> existing.fileName
+                    existing.fileName == existingFallbackName && desiredName != existingFallbackName -> desiredName
+                    else -> existing.fileName
+                }
+                val mergedMime = if (existing.mime.isBlank()) desiredMime else existing.mime
+                existing.copy(
+                    bytes = bytes,
+                    lastModified = maxOf(existing.lastModified, lastModified),
+                    fileName = mergedName,
+                    mime = mergedMime,
+                )
+            }
+            byPath[normalizedPath] = merged
+        }
+
+        byPath.values
+            .sortedByDescending { it.lastModified }
+    }
+
+    suspend fun deleteAssistantImageEntries(absolutePaths: List<String>): DeleteResult = withContext(Dispatchers.IO) {
+        val uploadDir = File(context.filesDir, "upload")
+        val files = absolutePaths
+            .asSequence()
+            .map { File(it) }
+            .filter { file -> StorageScanUtils.isInChildOf(file, uploadDir) }
+            .distinctBy { StorageScanUtils.normalizePath(it) }
+            .toList()
+        val result = deleteFiles(files)
+        invalidateOverviewCache()
+        result
+    }
+
+    suspend fun deleteAssistantFileEntries(absolutePaths: List<String>): DeleteResult = withContext(Dispatchers.IO) {
+        val uploadDir = File(context.filesDir, "upload")
+        val files = absolutePaths
+            .asSequence()
+            .map { File(it) }
+            .filter { file -> StorageScanUtils.isInChildOf(file, uploadDir) }
+            .distinctBy { StorageScanUtils.normalizePath(it) }
+            .toList()
+        val result = deleteFiles(files)
+        invalidateOverviewCache()
+        result
     }
 
     suspend fun scanOrphans(previewLimit: Int = 40): OrphanScanResult = withContext(Dispatchers.IO) {
@@ -421,18 +853,22 @@ class StorageManagerRepository(
                 }
         }
 
-        DeleteResult(
+        val result = DeleteResult(
             deletedCount = deletedCount,
             failedCount = failedCount,
             deletedBytes = deletedBytes,
         )
+        invalidateOverviewCache()
+        result
     }
 
     suspend fun clearCache(): DeleteResult = withContext(Dispatchers.IO) {
         val root = context.cacheDir
         val children = root.listFiles().orEmpty()
         val targets = children.filter { it.exists() }
-        deleteFilesOrDirs(targets)
+        val result = deleteFilesOrDirs(targets)
+        invalidateOverviewCache()
+        result
     }
 
     private data class Usage(val count: Int, val bytes: Long)
@@ -553,8 +989,8 @@ class StorageManagerRepository(
         val referenced = HashSet<String>(8_192)
 
         fun addUrl(url: String?) {
-            if (url.isNullOrBlank() || !url.startsWith("file://")) return
-            val file = toLocalFileOrNull(url) ?: return
+            if (url.isNullOrBlank()) return
+            val file = StorageScanUtils.toLocalFileOrNull(url, context.filesDir) ?: return
             referenced += StorageScanUtils.normalizePath(file)
         }
 
@@ -619,10 +1055,7 @@ class StorageManagerRepository(
             }
 
             batch.forEach { row ->
-                StorageScanUtils.fileUrlRegex.findAll(row.nodes).forEach { match ->
-                    val file = toLocalFileOrNull(match.value) ?: return@forEach
-                    referenced += StorageScanUtils.normalizePath(file)
-                }
+                referenced += StorageScanUtils.extractReferencedFilePathsFromText(row.nodes, context.filesDir)
             }
 
             offset += batchSize
@@ -630,13 +1063,6 @@ class StorageManagerRepository(
         }
 
         return referenced
-    }
-
-    private fun toLocalFileOrNull(url: String): File? {
-        val uri = runCatching { url.toUri() }.getOrNull() ?: return null
-        if (uri.scheme != "file") return null
-        val file = runCatching { uri.toFile() }.getOrNull() ?: return null
-        return file.takeIf { StorageScanUtils.isInChildOf(it, context.filesDir) }
     }
 
     private fun File.lengthSafe(): Long = runCatching { length() }.getOrNull() ?: 0L
